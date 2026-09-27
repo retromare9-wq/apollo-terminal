@@ -10,7 +10,8 @@ Interaktives Stationsterminal **A.P.O.L.L.O.** für ALIEN RPG: Die Spieler stell
 |---|---|
 | Frage eintippen + Enter | Freie Anfrage, z. B. „Gibt es Schäden?“ |
 | Buchstabe + Enter | Menüpunkt direkt wählen (A–I) |
-| ↑ ↓ | Auswahl im Menü bzw. Interkom; auf Karten: heraus-/hineinzoomen |
+| ↑ ↓ | Auswahl im Menü bzw. Interkom; auf Karten: eine Ebene zurück / tiefer |
+| A + Enter (Karte) | Zum markierten Ziel zoomen: Sternenkarte → System → Mond → Station |
 | Enter (leer) | Ausgewählten Punkt öffnen bzw. Textausgabe überspringen |
 | Esc | Zurück / Verbindung trennen |
 | F9 | Ton an/aus |

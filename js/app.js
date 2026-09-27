@@ -47,8 +47,8 @@ function renderCmd() { $('#cmd').textContent = state.buffer; }
 function initChrome() {
   $('#info-model').textContent = `${CONFIG.computer} ${CONFIG.model.replace(/^APOLLO\s*/, '')}`.trim();
   $('#info-logo').innerHTML = wyLogo();
-  $('#info-station').textContent = CONFIG.system;
-  $('#info-code').textContent = CONFIG.systemCode;
+  $('#info-station').textContent = CONFIG.sector;
+  $('#info-code').textContent = CONFIG.star;
 
   const t0 = Date.now();
   let lock = 14024;
@@ -253,15 +253,17 @@ function showUnknown(raw) {
 function showMap(topic) {
   leave();
   state.view = 'map';
-  setHint('↑↓ ZOOM · TASTE = ÜBERSPRINGEN · ESC MENÜ');
   view.innerHTML = '<div class="map"></div>';
   state.map = new MapView(view.firstElementChild, {
     config: CONFIG,
     station: STATION,
     sound,
-    onLevel: (i, info) => setTitle(info.title, `R${i + 1} ◂`),
+    onLevel: (i, info) => {
+      setTitle(info.title, `R${i + 1} ◂`);
+      setHint(info.next ? `A+⏎ ${info.next} · ↑ ZURÜCK · ESC MENÜ` : '↑ ZURÜCK · ESC MENÜ');
+    },
   });
-  state.map.flyTo(LEVELS.indexOf(topic.level));
+  state.map.show(LEVELS.indexOf(topic.level));
 }
 
 // ---------- Interkom ----------
@@ -430,8 +432,8 @@ function nav(dir) {
     renderProfile();
     sound.click();
   } else if (state.view === 'map' && state.map) {
-    if (dir < 0) state.map.zoomOut();
-    else state.map.zoomIn();
+    if (dir < 0) state.map.ascend();
+    else state.map.descend();
   } else {
     const scroller = $('.report', view) || $('.chat-log', view);
     if (scroller) scroller.scrollTop += dir * 80;
@@ -450,9 +452,15 @@ function submit() {
   if (!raw) {
     if (state.view === 'menu') openMenu(state.menuIndex);
     else if (state.view === 'interkom') startChat('call');
+    else if (state.view === 'map') state.map.descend();
     return;
   }
   const lower = raw.toLowerCase();
+  if (state.view === 'map' && lower === 'a') {
+    sound.confirm();
+    state.map.descend();
+    return;
+  }
   if (state.view === 'interkom') {
     if (lower === 'a') return startChat('call');
     if (lower === 'b') return startChat('message');

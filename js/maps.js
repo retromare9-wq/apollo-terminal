@@ -1,7 +1,10 @@
 // Animierte Karten: Sternenkarte → Sonnensystem → Mond → Station.
 // Gezoomt wird über die viewBox des SVG, dadurch bleiben alle Linien scharf.
+// Jede Ebene rastet auf ein Ziel ein; mit A (oder ↓) geht es eine Ebene tiefer.
 
-const NS = 'http://www.w3.org/2000/svg';
+import { el, txt, rng } from './svg.js';
+import { drawStarmap, SOL } from './starmap.js';
+
 export const W = 1000;
 export const H = 446;
 export const LEVELS = ['stars', 'system', 'moon', 'station'];
@@ -9,28 +12,8 @@ const FULL = { x: 0, y: 0, w: W, h: H };
 
 const easeOut = (k) => 1 - (1 - k) ** 3;
 const easeIn = (k) => k ** 3;
+const easeInOut = (k) => (k < 0.5 ? 4 * k ** 3 : 1 - (-2 * k + 2) ** 3 / 2);
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-
-function el(tag, attrs, parent) {
-  const node = document.createElementNS(NS, tag);
-  for (const [k, v] of Object.entries(attrs || {})) node.setAttribute(k, v);
-  if (parent) parent.appendChild(node);
-  return node;
-}
-
-function txt(parent, x, y, str, cls, attrs = {}) {
-  const t = el('text', { x, y, class: cls, ...attrs }, parent);
-  t.textContent = str;
-  return t;
-}
-
-function rng(seed) {
-  let s = seed >>> 0;
-  return () => {
-    s = (s * 1664525 + 1013904223) >>> 0;
-    return s / 4294967296;
-  };
-}
 
 function scaled(rect, factor, cx = rect.x + rect.w / 2, cy = rect.y + rect.h / 2) {
   const w = rect.w * factor;
@@ -67,44 +50,14 @@ function drawBackdrop(g, r, vx, hy) {
   [['11024', 18], ['11234', 440], ['11444', 862]].forEach(([s, x]) => txt(g, x, H - 12, s, 'm-num'));
 }
 
-function rings(g, cx, cy, radii, r) {
-  radii.forEach((rad) => {
-    el('circle', { cx, cy, r: rad, class: 'm-orbit' }, g);
-    const a = r() * Math.PI * 2;
-    el('circle', { cx: cx + Math.cos(a) * rad, cy: cy + Math.sin(a) * rad, r: 3.5, class: 'm-node' }, g);
-  });
-}
-
 // ---------- Ebenen ----------
-
-function drawStars(g, cfg) {
-  const r = rng(11);
-  drawBackdrop(g, r, [65, 150, 300, 470, 880], [115, 230, 395]);
-  for (let i = 0; i < 80; i++) {
-    el('circle', {
-      cx: (r() * W).toFixed(1), cy: (r() * H).toFixed(1), r: (0.6 + r() * 1.4).toFixed(1),
-      class: 'm-star', opacity: (0.3 + r() * 0.7).toFixed(2),
-    }, g);
-  }
-  rings(g, 165, 345, [82, 72], r);
-  rings(g, 770, 235, [128, 108, 26], r);
-  [['A132', 115, 330], ['A234', 330, 95], ['A345', 600, 62], ['B244', 820, 160], ['A756', 600, 392]]
-    .forEach(([name, x, y]) => {
-      el('circle', { cx: x, cy: y, r: 6, class: 'm-dot' }, g);
-      txt(g, x + 10, y + 4, name, 'm-label');
-    });
-  const T = { x: 330, y: 235 };
-  rings(g, T.x, T.y, [150, 136], r);
-  el('circle', { cx: T.x, cy: T.y, r: 9, class: 'm-target' }, g);
-  return { title: 'STERNENKARTE', target: T, lock: ['TARGET LOCKED', cfg.system], coord: '291035710' };
-}
 
 function drawSystem(g, cfg) {
   const r = rng(23);
   drawBackdrop(g, r, [90, 250, 750, 910], [90, 356]);
   const C = { x: 500, y: 223 };
   const roman = ['I', 'II', 'III', 'IV', 'V', 'VI'];
-  const orbits = [[48, 125], [88, 35], [140, 320], [215, 150], [305, 20], [410, 205]];
+  const orbits = [[48, 125], [88, 35], [150, 320], [225, 150], [310, 20], [410, 205]];
   let T = null;
   orbits.forEach(([rad, deg], i) => {
     const ry = rad * 0.62;
@@ -112,21 +65,31 @@ function drawSystem(g, cfg) {
     const a = (deg * Math.PI) / 180;
     const p = { x: C.x + rad * Math.cos(a), y: C.y + ry * Math.sin(a) };
     if (i === 2) {
-      el('circle', { cx: p.x, cy: p.y, r: 24, class: 'm-orbit' }, g);
-      el('circle', { cx: p.x, cy: p.y, r: 8, class: 'm-planet' }, g);
-      txt(g, p.x - 14, p.y + 40, cfg.planet, 'm-label');
+      // Gasriese mit Bändern und Ring, darum der Mond
+      el('circle', { cx: p.x, cy: p.y, r: 30, class: 'm-orbit' }, g);
+      el('ellipse', { cx: p.x, cy: p.y, rx: 21, ry: 5, class: 'm-gasring' }, g);
+      el('circle', { cx: p.x, cy: p.y, r: 12, class: 'm-planet' }, g);
+      [-5, 0, 5].forEach((dy) => el('line', { x1: p.x - Math.sqrt(144 - dy * dy), y1: p.y + dy, x2: p.x + Math.sqrt(144 - dy * dy), y2: p.y + dy, class: 'm-band' }, g));
+      txt(g, p.x, p.y + 50, cfg.planet, 'm-label', { 'text-anchor': 'middle' });
       const m = (-40 * Math.PI) / 180;
-      T = { x: p.x + 24 * Math.cos(m), y: p.y + 24 * Math.sin(m) };
+      T = { x: p.x + 30 * Math.cos(m), y: p.y + 30 * Math.sin(m) };
       el('circle', { cx: T.x, cy: T.y, r: 4.5, class: 'm-target' }, g);
     } else {
       el('circle', { cx: p.x, cy: p.y, r: 4 + (i % 3) * 2, class: 'm-dot' }, g);
-      txt(g, p.x + 10, p.y + 4, `${cfg.star} ${roman[i]}`, 'm-label');
+      txt(g, p.x + 10, p.y + 4, `${cfg.star}-${roman[i]}`, 'm-label');
     }
   });
   el('circle', { cx: C.x, cy: C.y, r: 22, class: 'm-orbit' }, g);
   el('circle', { cx: C.x, cy: C.y, r: 13, class: 'm-target' }, g);
   txt(g, C.x, C.y - 32, cfg.star, 'm-label', { 'text-anchor': 'middle' });
-  return { title: 'SONNENSYSTEM', target: T, lock: ['TARGET LOCKED', cfg.moon], coord: cfg.systemCode.replace(/ /g, '') };
+  return {
+    title: `SYSTEMKARTE ${cfg.star}`,
+    target: T,
+    lock: ['TARGET LOCKED', cfg.moon],
+    coord: `${cfg.planet} // ORBIT`,
+    lockTag: 'A',
+    next: `MOND ${cfg.moon}`,
+  };
 }
 
 function drawMoon(g, cfg) {
@@ -162,10 +125,17 @@ function drawMoon(g, cfg) {
   el('circle', { cx: S.x, cy: S.y, r: 14, class: 'm-orbit' }, g);
   el('circle', { cx: S.x, cy: S.y, r: 6, class: 'm-dot' }, g);
   txt(g, C.x - R - 20, C.y - R + 20, cfg.moon, 'm-label', { 'text-anchor': 'end' });
-  ['LAT   32.14 N', 'LON  118.07 E', 'GRAV   0.38 G', 'ATM    NONE', 'TEMP  -142 °C'].forEach((line, i) => {
-    txt(g, 30, 250 + i * 22, line, 'm-read');
+  [`PRIMARY ${cfg.planet}`, 'LAT   32.14 N', 'LON  118.07 E', 'GRAV   0.38 G', 'ATM    NONE', 'TEMP  -142 °C'].forEach((line, i) => {
+    txt(g, 30, 240 + i * 22, line, 'm-read');
   });
-  return { title: `MONDKARTE ${cfg.moon}`, target: S, lock: ['TARGET LOCKED', cfg.station], coord: 'DEC 0084 6402' };
+  return {
+    title: `MOND ${cfg.moon}`,
+    target: S,
+    lock: ['TARGET LOCKED', cfg.stationCode],
+    coord: 'DEC 0084 6402',
+    lockTag: 'A',
+    next: 'STATIONSPLAN',
+  };
 }
 
 function drawStation(g, cfg, station) {
@@ -211,7 +181,7 @@ function drawStation(g, cfg, station) {
 
   const c = center(terminal);
   return {
-    title: 'STATIONSPLAN',
+    title: `STATIONSPLAN ${cfg.stationCode}`,
     target: c,
     lock: ['YOU ARE HERE', `TERMINAL ${cfg.terminalId}`],
     coord: cfg.stationCode,
@@ -220,7 +190,7 @@ function drawStation(g, cfg, station) {
   };
 }
 
-const DRAW = { stars: drawStars, system: drawSystem, moon: drawMoon, station: drawStation };
+const DRAW = { stars: drawStarmap, system: drawSystem, moon: drawMoon, station: drawStation };
 
 // ---------- Ansicht ----------
 
@@ -231,10 +201,12 @@ export class MapView {
       <svg class="map-svg" viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid meet"></svg>
       <div class="hud hud-tl"><div>RANGE</div><div class="hud-range">${LEVELS.map((_, i) => `<span>${i + 1}</span>`).join('')}</div><div class="dim">RINGS ON</div></div>
       <div class="hud hud-tr"><div>R VECTORS</div><div class="dim">TRAILS OFF</div></div>
-      <div class="hud hud-bl"><span class="hud-state">STBY</span></div>
+      <div class="hud hud-bl"><div class="hud-dist"></div><span class="hud-state">STBY</span></div>
       <div class="hud hud-br">L VECTORS</div>
-      <div class="hud-ruler"></div>`;
+      <div class="hud-ruler"></div>
+      <aside class="star-panel" hidden></aside>`;
     this.svg = root.querySelector('svg');
+    this.panel = root.querySelector('.star-panel');
     this.token = 0;
     this.level = -1;
     this.animating = false;
@@ -242,17 +214,20 @@ export class MapView {
 
   setVB(r) { this.svg.setAttribute('viewBox', `${r.x} ${r.y} ${r.w} ${r.h}`); }
 
-  setState(s) {
-    const n = this.root.querySelector('.hud-state');
-    if (n) n.textContent = s;
-  }
+  setState(s) { this.root.querySelector('.hud-state').textContent = s; }
+
+  setDist(text) { this.root.querySelector('.hud-dist').textContent = text; }
 
   draw(i) {
     this.svg.replaceChildren();
     this.layer = el('g', {}, this.svg);
     this.info = DRAW[LEVELS[i]](this.layer, this.config, this.station);
+    this.home = this.info.home || FULL;
     this.level = i;
+    this.root.classList.toggle('lvl-stars', LEVELS[i] === 'stars');
     this.root.querySelectorAll('.hud-range span').forEach((s, k) => s.classList.toggle('on', k === i));
+    this.panel.hidden = true;
+    this.setDist(LEVELS[i] === 'stars' ? `DIST SOL ${this.config.starmap.distancePc.toFixed(2)} PC` : '');
     if (this.onLevel) this.onLevel(i, this.info);
   }
 
@@ -272,43 +247,97 @@ export class MapView {
 
   zoomTo(from, to, dur, ease, tok, opacity) {
     return this.tween(dur, (k) => {
-      const e = ease(k);
-      this.setVB(interpolate(from, to, e));
+      this.setVB(interpolate(from, to, ease(k)));
       if (opacity) this.layer.style.opacity = opacity(k);
     }, tok);
   }
 
-  // Fliegt von Ebene fromIdx bis zur Ebene targetIdx und rastet auf jedem Ziel ein.
-  async flyTo(targetIdx, fromIdx = 0, { relock = true } = {}) {
+  // Ebene i anzeigen: Anflug, Einrasten, ggf. Datenpanel.
+  async show(i, { arrive = 'fade' } = {}) {
     const tok = ++this.token;
-    this.targetIdx = targetIdx;
+    this.pending = null;
     this.animating = true;
+    this.draw(i);
     this.setState('TRACKING');
-    for (let i = fromIdx; i <= targetIdx; i++) {
-      this.draw(i);
-      if (i > fromIdx) {
-        this.sound.zoom();
-        await this.zoomTo(scaled(FULL, 4), FULL, 600, easeOut, tok, (k) => Math.min(1, k * 1.6));
-      } else if (relock) {
-        await this.zoomTo(scaled(FULL, 1.12), FULL, 450, easeOut, tok, (k) => k);
-      } else {
-        this.setVB(FULL);
-      }
-      if (tok !== this.token) return;
-      const lock = await this.lockOn(tok, !relock && i === fromIdx);
-      if (tok !== this.token) return;
-      if (i < targetIdx) {
-        await sleep(200);
-        if (tok !== this.token) return;
-        lock.querySelectorAll('text').forEach((t) => t.remove());
-        this.sound.zoom();
-        const into = scaled(FULL, 0.04, this.info.target.x, this.info.target.y);
-        await this.zoomTo(FULL, into, 800, easeIn, tok, (k) => 1 - Math.max(0, (k - 0.55) / 0.45));
-        if (tok !== this.token) return;
-      }
+    if (this.info.start) await this.flight(tok);
+    else if (arrive === 'zoom') {
+      this.sound.zoom();
+      await this.zoomTo(scaled(this.home, 4), this.home, 650, easeOut, tok, (k) => Math.min(1, k * 1.6));
+    } else {
+      await this.zoomTo(scaled(this.home, 1.12), this.home, 450, easeOut, tok, (k) => k);
     }
+    if (tok !== this.token) return;
+    await this.lockOn(tok, false);
+    if (tok !== this.token) return;
+    if (this.info.panel) await this.showPanel(tok, false);
+    if (tok !== this.token) return;
     this.animating = false;
     this.setState('LOCK');
+  }
+
+  // Seitlicher Anflug von Sol aus mit Drehung, Route und Entfernungszähler.
+  async flight(tok) {
+    const { start, via, home, target, world, route } = this.info;
+    const end = { x: home.x + home.w / 2, y: home.y + home.h / 2 };
+    const total = this.config.starmap.distancePc;
+    this.sound.zoom();
+    setTimeout(() => { if (tok === this.token) this.sound.zoom(); }, 1500);
+    await this.tween(3600, (k) => {
+      const e = easeInOut(k);
+      const w = Math.exp(Math.log(start.w) + (Math.log(home.w) - Math.log(start.w)) * e);
+      const h = w * (H / W);
+      const u = 1 - e;
+      const cx = u * u * start.cx + 2 * u * e * via.x + e * e * end.x;
+      const cy = u * u * start.cy + 2 * u * e * via.y + e * e * end.y;
+      this.setVB({ x: cx - w / 2, y: cy - h / 2, w, h });
+      world.setAttribute('transform', `rotate(${(-16 * (1 - e)).toFixed(3)} ${target.x} ${target.y})`);
+      this.layer.style.opacity = Math.min(1, k * 4);
+      const p = Math.min(1, k * 1.15);
+      route.setAttribute('x2', SOL.x + (target.x - SOL.x) * p);
+      route.setAttribute('y2', SOL.y + (target.y - SOL.y) * p);
+      this.setDist(`DIST SOL ${(total * p).toFixed(2).padStart(5, '0')} PC`);
+    }, tok);
+  }
+
+  async showPanel(tok, instant) {
+    const sm = this.config.starmap;
+    this.panel.innerHTML = `
+      <div class="sp-head">POSITION DATA</div>
+      ${sm.rows.map(([k, v]) => `<div class="sp-row"><span class="dim">${k}</span><span>${v}</span></div>`).join('')}
+      <div class="sp-head">LEGEND</div>
+      ${sm.legend.map(([cls, name, sub]) => `<div class="sp-leg"><i class="sw ${cls}"></i><span>${name}${sub ? `<small>${sub}</small>` : ''}</span></div>`).join('')}
+      <div class="sp-key"><span class="hl">A</span> ${this.info.next}</div>`;
+    this.panel.hidden = false;
+    const items = [...this.panel.children];
+    if (instant) return;
+    items.forEach((n) => { n.style.visibility = 'hidden'; });
+    for (const n of items) {
+      if (tok !== this.token) break;
+      n.style.visibility = 'visible';
+      this.sound.tick();
+      await sleep(70);
+    }
+    items.forEach((n) => { n.style.visibility = 'visible'; });
+  }
+
+  // Eine Ebene tiefer: ins Ziel hineinzoomen, dann die nächste Ebene anfliegen.
+  async descend() {
+    if (this.animating || this.level >= LEVELS.length - 1) return;
+    const tok = ++this.token;
+    this.animating = true;
+    this.pending = this.level + 1;
+    this.panel.hidden = true;
+    this.layer.querySelectorAll('.lock text, .lock .m-tagbox').forEach((t) => t.remove());
+    this.sound.zoom();
+    const into = scaled(this.home, 0.04, this.info.target.x, this.info.target.y);
+    await this.zoomTo(this.home, into, 800, easeIn, tok, (k) => 1 - Math.max(0, (k - 0.55) / 0.45));
+    if (tok !== this.token) return;
+    this.show(this.pending, { arrive: 'zoom' });
+  }
+
+  ascend() {
+    if (this.animating || this.level <= 0) return;
+    this.show(this.level - 1);
   }
 
   // Animation abbrechen und direkt das Endbild zeigen.
@@ -316,21 +345,17 @@ export class MapView {
     if (!this.animating) return;
     const tok = ++this.token;
     this.animating = false;
-    this.draw(this.targetIdx);
-    this.setVB(FULL);
+    this.draw(this.pending ?? this.level);
+    this.pending = null;
+    this.setVB(this.home);
     this.layer.style.opacity = 1;
+    if (this.info.route) {
+      this.info.route.setAttribute('x2', this.info.target.x);
+      this.info.route.setAttribute('y2', this.info.target.y);
+    }
     this.lockOn(tok, true);
+    if (this.info.panel) this.showPanel(tok, true);
     this.setState('LOCK');
-  }
-
-  zoomIn() {
-    if (this.animating || this.level >= LEVELS.length - 1) return;
-    this.flyTo(this.level + 1, this.level, { relock: false });
-  }
-
-  zoomOut() {
-    if (this.animating || this.level <= 0) return;
-    this.flyTo(this.level - 1, this.level - 1);
   }
 
   destroy() { this.token++; }
@@ -338,8 +363,9 @@ export class MapView {
   async lockOn(tok, instant) {
     const info = this.info;
     const { x, y } = info.target;
+    const s = info.lockScale || 1;
     const size = info.lockSize || { x: 24, y: 24 };
-    const g = el('g', { class: 'lock', transform: `translate(${x} ${y})` }, this.layer);
+    const g = el('g', { class: 'lock', transform: `translate(${x} ${y}) scale(${s})` }, this.layer);
     if (!info.lockSize) el('rect', { x: -15, y: -15, width: 30, height: 30, class: 'm-lockbox' }, g);
     const br = el('path', { class: 'm-lock' }, g);
     const setSize = (grow) => br.setAttribute('d', corners(size.x + grow, size.y + grow));
@@ -350,17 +376,24 @@ export class MapView {
       t1 = txt(g, 0, -size.y - 30, '', 'm-lock-t sm', { 'text-anchor': 'middle' });
       t2 = txt(g, 0, -size.y - 12, '', 'm-lock-t2 sm', { 'text-anchor': 'middle' });
     } else {
-      const left = x > W * 0.62;
+      const left = (x - this.home.x) / this.home.w > 0.72;
       const tx = left ? -size.x - 18 : size.x + 18;
       const anchor = left ? 'end' : 'start';
       t3 = txt(g, tx, -30, '', 'm-coord', { 'text-anchor': anchor });
       t1 = txt(g, tx, -4, '', 'm-lock-t', { 'text-anchor': anchor });
       t2 = txt(g, tx, 24, '', 'm-lock-t2', { 'text-anchor': anchor });
     }
+    const tag = () => {
+      if (!info.lockTag) return;
+      const tg = el('g', { class: 'm-tagbox', transform: `translate(${-size.x - 2} ${-size.y - 26})` }, g);
+      el('rect', { x: 0, y: 0, width: 22, height: 22 }, tg);
+      txt(tg, 11, 17, info.lockTag, '', { 'text-anchor': 'middle' });
+    };
     const fill = () => {
       t1.textContent = info.lock[0];
       t2.textContent = info.lock[1];
       t3.textContent = info.coord;
+      tag();
     };
     if (instant) {
       setSize(0);
@@ -368,7 +401,7 @@ export class MapView {
       return g;
     }
 
-    await this.tween(420, (k) => setSize(70 * (1 - easeOut(k))), tok);
+    await this.tween(480, (k) => setSize(90 * (1 - easeOut(k))), tok);
     if (tok !== this.token) return g;
     this.sound.lock();
     for (let i = 0; i < 2; i++) {
@@ -387,3 +420,4 @@ export class MapView {
     return g;
   }
 }
+
