@@ -125,7 +125,7 @@ function drawSystem(g, cfg) {
   });
   el('circle', { cx: C.x, cy: C.y, r: 22, class: 'm-orbit' }, g);
   el('circle', { cx: C.x, cy: C.y, r: 13, class: 'm-target' }, g);
-  txt(g, C.x - 22, C.y + 40, cfg.star, 'm-label');
+  txt(g, C.x, C.y - 32, cfg.star, 'm-label', { 'text-anchor': 'middle' });
   return { title: 'SONNENSYSTEM', target: T, lock: ['TARGET LOCKED', cfg.moon], coord: cfg.systemCode.replace(/ /g, '') };
 }
 
