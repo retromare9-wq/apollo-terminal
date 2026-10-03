@@ -260,7 +260,8 @@ function showMap(topic) {
     sound,
     onLevel: (i, info) => {
       setTitle(info.title, `R${i + 1} ◂`);
-      setHint(info.next ? `A+⏎ ${info.next} · ↑ ZURÜCK · ESC MENÜ` : '↑ ZURÜCK · ESC MENÜ');
+      if (info.plan) setHint('←→ RAUM WÄHLEN · RAUM-ID+⏎ · ↑ ZURÜCK · ESC MENÜ');
+      else setHint(info.next ? `A+⏎ ${info.next} · ↑ ZURÜCK · ESC MENÜ` : '↑ ZURÜCK · ESC MENÜ');
     },
   });
   state.map.show(LEVELS.indexOf(topic.level));
@@ -456,6 +457,10 @@ function submit() {
     return;
   }
   const lower = raw.toLowerCase();
+  if (state.view === 'map' && state.map?.info?.plan) {
+    const i = state.map.findRoom(raw);
+    if (i >= 0) { state.map.focusRoom(i); return; }
+  }
   if (state.view === 'map' && lower === 'a') {
     sound.confirm();
     state.map.descend();
@@ -498,6 +503,14 @@ function onKey(e) {
     case 'Escape': e.preventDefault(); back(); return;
     case 'ArrowUp': e.preventDefault(); nav(-1); return;
     case 'ArrowDown': e.preventDefault(); nav(1); return;
+    case 'ArrowLeft':
+    case 'ArrowRight':
+      if (state.view === 'map' && state.map?.info?.plan) {
+        e.preventDefault();
+        state.map.selectRoom(e.key === 'ArrowLeft' ? -1 : 1);
+        return;
+      }
+      break;
     case 'Enter': e.preventDefault(); submit(); return;
     case 'Backspace':
       e.preventDefault();

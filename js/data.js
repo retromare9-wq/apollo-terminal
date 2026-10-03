@@ -1,3 +1,5 @@
+import { LEVEL0 } from './station-level0.js';
+
 // Alle Inhalte des Terminals. Texte, Namen und Werte hier ändern –
 // der restliche Code muss dafür nicht angefasst werden.
 // Wörter wie KRITISCH, WARNUNG oder OFFLINE werden in Berichten automatisch eingefärbt.
@@ -45,24 +47,21 @@ export const CONFIG = {
   ],
 };
 
-// Module der Station für den Stationsplan (Koordinaten im Kartenraster 1000 × 446).
-// status: 'ok' | 'warn' | 'damage'   terminal: true markiert den Standort des Terminals.
+// Stationsplan: digitalisierte Ebenen (siehe js/station-level0.js).
+// status: nur Abweichungen eintragen – alles andere gilt als in Ordnung.
+//   'warn' (Warnung), 'damage' (Schaden), 'offline' (ohne Energie), 'sealed' (abgeriegelt)
+// info: optionaler Text, der bei Auswahl eines Raums erscheint.
+// Raum-IDs stehen im Infopanel des Terminals, z. B. XENO-2 oder WOHN-B3.04.
 export const STATION = {
-  modules: [
-    { id: 'hangar', name: 'HANGAR', code: 'H-01', x: 50, y: 170, w: 150, h: 110, status: 'ok' },
-    { id: 'wohn', name: 'WOHNMODUL', code: 'W-02', x: 260, y: 110, w: 150, h: 70, status: 'ok' },
-    { id: 'kantine', name: 'KANTINE', code: 'W-03', x: 260, y: 260, w: 150, h: 60, status: 'ok' },
-    { id: 'kommando', name: 'KOMMANDO', code: 'C-01', x: 460, y: 110, w: 150, h: 70, status: 'ok', terminal: true },
-    { id: 'lager', name: 'LAGER C', code: 'L-03', x: 460, y: 260, w: 150, h: 60, status: 'damage' },
-    { id: 'labor', name: 'LABOR A', code: 'R-01', x: 660, y: 110, w: 150, h: 70, status: 'ok' },
-    { id: 'medizin', name: 'MEDIZIN', code: 'M-01', x: 660, y: 260, w: 150, h: 60, status: 'ok' },
-    { id: 'reaktor', name: 'REAKTOR', code: 'E-01', x: 855, y: 170, w: 110, h: 110, status: 'warn' },
-  ],
-  corridors: [
-    ['hangar', 'wohn'], ['hangar', 'kantine'], ['wohn', 'kommando'], ['kommando', 'labor'],
-    ['labor', 'reaktor'], ['medizin', 'reaktor'], ['wohn', 'kantine'], ['kommando', 'lager'],
-    ['labor', 'medizin'], ['kantine', 'lager'], ['lager', 'medizin'],
-  ],
+  levels: [LEVEL0],
+  status: {
+    'XENO-2': 'damage',
+    'TECH-6': 'warn',
+  },
+  info: {
+    'XENO-2': 'DRUCKVERLUST. SCHOTT VERRIEGELT. ZUTRITT NUR MIT SCHUTZANZUG.',
+    'TECH-6': 'KÜHLKREISLAUF 2 MELDET DRUCKABFALL.',
+  },
 };
 
 // Informationskategorien.
@@ -80,21 +79,21 @@ export const TOPICS = [
     weak: ['hülle', 'problem', 'intakt'],
     blocks: [
       { type: 'text', text: 'STRUKTURANALYSE ABGESCHLOSSEN. 2 BEREICHE MIT AUFFÄLLIGKEITEN ERKANNT.' },
-      { type: 'alert', text: 'LAGER C: DRUCKVERLUST DURCH HÜLLENBRUCH IN SEKTOR 4. SCHOTT VERRIEGELT.' },
+      { type: 'alert', text: 'XENOBIOLOGIE 2: DRUCKVERLUST DURCH HÜLLENBRUCH. SCHOTT VERRIEGELT.' },
       {
         type: 'table',
         head: ['BEREICH', 'STATUS', 'INTEGRITÄT'],
         rows: [
-          ['KOMMANDO', 'NOMINAL', '100%'],
-          ['WOHNMODUL', 'NOMINAL', '98%'],
-          ['LABOR A', 'NOMINAL', '96%'],
-          ['LAGER C', 'KRITISCH', '41%'],
-          ['REAKTOR', 'WARNUNG', '78%'],
-          ['HANGAR', 'NOMINAL', '92%'],
+          ['ADMINISTRATION', 'NOMINAL', '100%'],
+          ['WOHNBEREICHE', 'NOMINAL', '98%'],
+          ['KRANKENSTATION', 'NOMINAL', '96%'],
+          ['XENOBIOLOGIE', 'KRITISCH', '41%'],
+          ['TECHNIK & SYSTEME', 'WARNUNG', '78%'],
+          ['GEOLOGIE', 'NOMINAL', '92%'],
         ],
       },
       { type: 'meter', label: 'HÜLLENINTEGRITÄT GESAMT', value: 87, state: 'warn' },
-      { type: 'text', text: 'EMPFEHLUNG: WARTUNGSTEAM ZU LAGER C ENTSENDEN. KÜHLKREISLAUF DES REAKTORS ÜBERPRÜFEN.' },
+      { type: 'text', text: 'EMPFEHLUNG: WARTUNGSTEAM ZU XENOBIOLOGIE 2 ENTSENDEN. KÜHLKREISLAUF IN TECHNIK & SYSTEME 6 ÜBERPRÜFEN.' },
     ],
   },
   {
@@ -121,7 +120,7 @@ export const TOPICS = [
       { type: 'meter', label: 'SAUERSTOFFRESERVEN', value: 72 },
       { type: 'meter', label: 'WASSERAUFBEREITUNG', value: 94 },
       { type: 'meter', label: 'LUFTFILTER', value: 58, state: 'warn' },
-      { type: 'text', text: 'HINWEIS: FILTERWECHSEL IN WOHNMODUL W-02 FÄLLIG. WARNUNG WIRD IN 72 STUNDEN ESKALIERT.' },
+      { type: 'text', text: 'HINWEIS: FILTERWECHSEL IN DEN WOHNBEREICHEN (FAMILIEN/PAARE) FÄLLIG. WARNUNG WIRD IN 72 STUNDEN ESKALIERT.' },
     ],
   },
   {
@@ -133,7 +132,7 @@ export const TOPICS = [
       'kühlung', 'kühlkreislauf', 'notstrom'],
     weak: ['licht', 'versorgung'],
     blocks: [
-      { type: 'text', text: 'FUSIONSREAKTOR E-01 IN BETRIEB. LEISTUNGSABGABE REDUZIERT.' },
+      { type: 'text', text: 'FUSIONSREAKTOR (TECHNIK & SYSTEME) IN BETRIEB. LEISTUNGSABGABE REDUZIERT.' },
       { type: 'meter', label: 'REAKTORLEISTUNG', value: 82 },
       { type: 'meter', label: 'KÜHLMITTELDURCHSATZ', value: 64, state: 'warn' },
       { type: 'meter', label: 'NOTSTROMBATTERIEN', value: 100 },
@@ -142,9 +141,9 @@ export const TOPICS = [
         head: ['VERBRAUCHER', 'LAST', 'STATUS'],
         rows: [
           ['LEBENSERHALTUNG', '31 %', 'NOMINAL'],
-          ['LABOR A', '22 %', 'NOMINAL'],
+          ['XENOBIOLOGIE', '22 %', 'NOMINAL'],
           ['KOMMUNIKATION', '9 %', 'NOMINAL'],
-          ['LAGER C', '0 %', 'OFFLINE'],
+          ['XENOBIOLOGIE 2', '0 %', 'OFFLINE'],
         ],
       },
       { type: 'alert', text: 'WARNUNG: KÜHLKREISLAUF 2 MELDET DRUCKABFALL. URSACHE UNBEKANNT.' },
@@ -168,7 +167,7 @@ export const TOPICS = [
           ['ENERGIE', 'WARNUNG'],
           ['KOMMUNIKATION', 'NOMINAL'],
           ['SENSORNETZ', 'NOMINAL'],
-          ['LAGER C', 'OFFLINE'],
+          ['XENOBIOLOGIE 2', 'OFFLINE'],
         ],
       },
       { type: 'text', text: 'ANWESENDES PERSONAL: 6. NÄCHSTER VERSORGUNGSFLUG: 41 TAGE.' },
@@ -188,11 +187,11 @@ export const TOPICS = [
         type: 'table',
         head: ['NAME', 'FUNKTION', 'LETZTER STANDORT'],
         rows: [
-          ['MARCUS HOLT', 'STATIONSLEITER', 'KOMMANDO'],
-          ['DR. ELENA REYES', 'WISSENSCHAFTLERIN', 'LABOR A'],
-          ['JONAH PIKE', 'TECHNIKER', 'REAKTOR'],
-          ['DR. AMARA OKAFOR', 'ÄRZTIN', 'MEDIZIN'],
-          ['VIKTOR SAND', 'SICHERHEIT', 'HANGAR'],
+          ['MARCUS HOLT', 'STATIONSLEITER', 'ADMINISTRATION'],
+          ['DR. ELENA REYES', 'WISSENSCHAFTLERIN', 'XENOBIOLOGIE'],
+          ['JONAH PIKE', 'TECHNIKER', 'TECHNIK & SYSTEME'],
+          ['DR. AMARA OKAFOR', 'ÄRZTIN', 'KRANKENSTATION'],
+          ['VIKTOR SAND', 'SICHERHEIT', 'MARSHAL'],
           ['LENA KOWALSKI', 'LOGISTIK', 'NICHT ERREICHBAR'],
         ],
       },
@@ -284,11 +283,11 @@ export const MENU = [
 
 // Stationsbewohner für das Interkom. image: Pfad zu einem Bild, z. B. 'img/reyes.jpg', oder null.
 export const PERSONNEL = [
-  { name: 'MARCUS HOLT', role: 'STATIONSLEITER', location: 'KOMMANDO', available: true, image: null },
-  { name: 'DR. ELENA REYES', role: 'LEITENDE WISSENSCHAFTLERIN', location: 'LABOR A', available: true, image: null },
-  { name: 'JONAH PIKE', role: 'TECHNIKER', location: 'REAKTOR', available: true, image: null },
-  { name: 'DR. AMARA OKAFOR', role: 'STATIONSÄRZTIN', location: 'MEDIZIN', available: true, image: null },
-  { name: 'VIKTOR SAND', role: 'SICHERHEITSCHEF', location: 'HANGAR', available: true, image: null },
+  { name: 'MARCUS HOLT', role: 'STATIONSLEITER', location: 'ADMINISTRATION', available: true, image: null },
+  { name: 'DR. ELENA REYES', role: 'LEITENDE WISSENSCHAFTLERIN', location: 'XENOBIOLOGIE', available: true, image: null },
+  { name: 'JONAH PIKE', role: 'TECHNIKER', location: 'TECHNIK & SYSTEME', available: true, image: null },
+  { name: 'DR. AMARA OKAFOR', role: 'STATIONSÄRZTIN', location: 'KRANKENSTATION', available: true, image: null },
+  { name: 'VIKTOR SAND', role: 'SICHERHEITSCHEF', location: 'MARSHAL', available: true, image: null },
   { name: 'LENA KOWALSKI', role: 'LOGISTIK', location: 'UNBEKANNT', available: false, image: null },
 ];
 

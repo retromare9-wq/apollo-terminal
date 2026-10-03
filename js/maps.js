@@ -4,6 +4,7 @@
 
 import { el, txt, rng } from './svg.js';
 import { drawStarmap, SOL } from './starmap.js';
+import { drawStationPlan, roomName, frame } from './stationplan.js';
 
 export const W = 1000;
 export const H = 446;
@@ -139,55 +140,7 @@ function drawMoon(g, cfg) {
 }
 
 function drawStation(g, cfg, station) {
-  const r = rng(41);
-  drawBackdrop(g, r, [30, 970], [40, 406]);
-  [[170, 60], [830, 400], [520, 430], [930, 40], [60, 420]].forEach(([cx, cy]) => {
-    const ph = [r() * 6.28, r() * 6.28, r() * 6.28];
-    for (let k = 1; k <= 6; k++) {
-      const rad = 22 * k;
-      const pts = [];
-      for (let i = 0; i < 48; i++) {
-        const a = (i / 48) * Math.PI * 2;
-        const f = 1 + 0.18 * (0.6 * Math.sin(3 * a + ph[0]) + 0.3 * Math.sin(5 * a + ph[1]) + 0.2 * Math.sin(2 * a + ph[2]));
-        pts.push(`${(cx + Math.cos(a) * rad * f * 1.4).toFixed(1)} ${(cy + Math.sin(a) * rad * f).toFixed(1)}`);
-      }
-      el('path', { d: `M${pts.join('L')}Z`, class: 'm-topo' }, g);
-    }
-  });
-
-  const byId = Object.fromEntries(station.modules.map((m) => [m.id, m]));
-  const center = (m) => ({ x: m.x + m.w / 2, y: m.y + m.h / 2 });
-  station.corridors.forEach(([a, b]) => {
-    if (!byId[a] || !byId[b]) return;
-    const A = center(byId[a]);
-    const B = center(byId[b]);
-    el('path', { d: `M${A.x} ${A.y} H${B.x} V${B.y}`, class: 'm-corr' }, g);
-  });
-
-  let terminal = station.modules[0];
-  station.modules.forEach((m) => {
-    if (m.terminal) terminal = m;
-    const mg = el('g', { class: `m-mod ${m.status || 'ok'}` }, g);
-    el('rect', { x: m.x, y: m.y, width: m.w, height: m.h }, mg);
-    txt(mg, m.x + m.w / 2, m.y + m.h / 2 + 2, m.name, 'm-mod-t', { 'text-anchor': 'middle' });
-    txt(mg, m.x + m.w / 2, m.y + m.h / 2 + 20, m.code, 'm-mod-c', { 'text-anchor': 'middle' });
-    if (m.status === 'damage') txt(mg, m.x, m.y + m.h + 18, '▲ SCHADEN', 'm-tag');
-    if (m.status === 'warn') txt(mg, m.x, m.y + m.h + 18, '▲ WARNUNG', 'm-tag');
-  });
-
-  txt(g, 950, 70, 'N ▲', 'm-read', { 'text-anchor': 'end' });
-  el('path', { d: 'M820 385 v8 h120 v-8 M880 389 v4', class: 'm-scale' }, g);
-  txt(g, 880, 378, '50 M', 'm-read', { 'text-anchor': 'middle' });
-
-  const c = center(terminal);
-  return {
-    title: `STATIONSPLAN ${cfg.stationCode}`,
-    target: c,
-    lock: ['YOU ARE HERE', `TERMINAL ${cfg.terminalId}`],
-    coord: cfg.stationCode,
-    lockSize: { x: terminal.w / 2 + 12, y: terminal.h / 2 + 12 },
-    lockAbove: true,
-  };
+  return drawStationPlan(g, cfg, station, (id) => station.status[id]);
 }
 
 const DRAW = { stars: drawStarmap, system: drawSystem, moon: drawMoon, station: drawStation };
@@ -212,7 +165,12 @@ export class MapView {
     this.animating = false;
   }
 
-  setVB(r) { this.svg.setAttribute('viewBox', `${r.x} ${r.y} ${r.w} ${r.h}`); }
+  setVB(r) {
+    this.vb = r;
+    this.svg.setAttribute('viewBox', `${r.x} ${r.y} ${r.w} ${r.h}`);
+    // Einheiten pro Bildschirmpixel – für gleichbleibende Schriftgrößen im Stationsplan
+    this.svg.style.setProperty('--k', (r.w / (this.svg.clientWidth || 1214)).toFixed(4));
+  }
 
   setState(s) { this.root.querySelector('.hud-state').textContent = s; }
 
@@ -224,6 +182,9 @@ export class MapView {
     this.info = DRAW[LEVELS[i]](this.layer, this.config, this.station);
     this.home = this.info.home || FULL;
     this.level = i;
+    this.sel = null;
+    this._order = null;
+    this.root.classList.toggle('lvl-station', !!this.info.plan);
     this.root.classList.toggle('lvl-stars', LEVELS[i] === 'stars');
     this.root.querySelectorAll('.hud-range span').forEach((s, k) => s.classList.toggle('on', k === i));
     this.panel.hidden = true;
@@ -267,7 +228,7 @@ export class MapView {
       await this.zoomTo(scaled(this.home, 1.12), this.home, 450, easeOut, tok, (k) => k);
     }
     if (tok !== this.token) return;
-    await this.lockOn(tok, false);
+    if (!this.info.noLock) await this.lockOn(tok, false);
     if (tok !== this.token) return;
     if (this.info.panel) await this.showPanel(tok, false);
     if (tok !== this.token) return;
@@ -336,7 +297,9 @@ export class MapView {
   }
 
   ascend() {
-    if (this.animating || this.level <= 0) return;
+    if (this.animating) return;
+    if (this.sel != null) { this.clearRoom(); return; }
+    if (this.level <= 0) return;
     this.show(this.level - 1);
   }
 
@@ -353,9 +316,90 @@ export class MapView {
       this.info.route.setAttribute('x2', this.info.target.x);
       this.info.route.setAttribute('y2', this.info.target.y);
     }
-    this.lockOn(tok, true);
+    if (!this.info.noLock) this.lockOn(tok, true);
     if (this.info.panel) this.showPanel(tok, true);
     this.setState('LOCK');
+  }
+
+  // ---------- Räume im Stationsplan ----------
+
+  rooms() {
+    if (!this.info?.plan) return [];
+    if (!this._order) {
+      // Lesereihenfolge: von oben nach unten, links nach rechts, grob in Zeilen
+      const list = this.info.plan.level.rooms.slice();
+      const key = (r) => { const b = r.rects[0]; return [Math.round(b[1] / 150), b[0]]; };
+      list.sort((a, b) => { const ka = key(a), kb = key(b); return ka[0] - kb[0] || ka[1] - kb[1]; });
+      this._order = list;
+    }
+    return this._order;
+  }
+
+  selectRoom(dir) {
+    const list = this.rooms();
+    if (!list.length || this.animating) return;
+    const n = list.length;
+    const i = this.sel == null ? (dir > 0 ? 0 : n - 1) : (this.sel + dir + n) % n;
+    this.focusRoom(i);
+  }
+
+  findRoom(query) {
+    const norm = (s) => s.toUpperCase().replace(/[^A-Z0-9ÄÖÜ.]+/g, ' ').trim();
+    const q = norm(query);
+    if (!q) return -1;
+    const level = this.info.plan.level;
+    return this.rooms().findIndex((r) => norm(r.id) === q || norm(roomName(level, r)) === q
+      || norm(r.id.replace('-', ' ')) === q);
+  }
+
+  async focusRoom(i) {
+    const room = this.rooms()[i];
+    const { level, nodes } = this.info.plan;
+    if (this.sel != null) nodes[this.rooms()[this.sel].id]?.classList.remove('sel');
+    this.sel = i;
+    nodes[room.id].classList.add('sel');
+    this.sound.beep();
+    this.showRoom(room, level);
+    const b = room.rects.reduce((m, r) => [Math.min(m[0], r[0]), Math.min(m[1], r[1]), Math.max(m[2], r[2]), Math.max(m[3], r[3])], [Infinity, Infinity, -Infinity, -Infinity]);
+    const target = frame(b, 420);
+    // Raum etwas links der Mitte, damit das Infopanel rechts nichts verdeckt
+    target.x += target.w * 0.14;
+    const tok = ++this.token;
+    await this.zoomTo(this.vb || this.home, target, 450, easeOut, tok);
+  }
+
+  clearRoom() {
+    const { nodes } = this.info.plan;
+    if (this.sel != null) nodes[this.rooms()[this.sel].id]?.classList.remove('sel');
+    this.sel = null;
+    this.panel.hidden = true;
+    const tok = ++this.token;
+    this.zoomTo(this.vb || this.home, this.home, 450, easeOut, tok);
+    if (this.onRoom) this.onRoom(null);
+  }
+
+  showRoom(room, level) {
+    const status = this.station.status[room.id];
+    const st = {
+      warn: '<span class="warn">▲ WARNUNG</span>',
+      damage: '<span class="crit blink">▲ SCHADEN</span>',
+      offline: '<span class="crit">■ OFFLINE</span>',
+      sealed: '<span class="crit">◆ ABGERIEGELT</span>',
+    }[status] || 'IN ORDNUNG';
+    const doors = level.doors.filter((d) => d.type === 'room' && room.rects.some(([x0, y0, x1, y1]) => d.x >= x0 - 2 && d.x <= x1 + 2 && d.y >= y0 - 2 && d.y <= y1 + 2)).length;
+    const info = this.station.info[room.id];
+    this.panel.innerHTML = `
+      <div class="sp-head">RAUMDATEN</div>
+      <div class="sp-title">${roomName(level, room)}</div>
+      <div class="sp-row"><span class="dim">ID</span><span>${room.id}</span></div>
+      <div class="sp-row"><span class="dim">BEREICH</span><span>${level.zones[room.zone] || room.zone}</span></div>
+      <div class="sp-row"><span class="dim">EBENE</span><span>${level.name}</span></div>
+      <div class="sp-row"><span class="dim">ZUGÄNGE</span><span>${doors}</span></div>
+      <div class="sp-row"><span class="dim">STATUS</span><span>${st}</span></div>
+      ${info ? `<div class="sp-note">${info}</div>` : ''}
+      <div class="sp-key">←→ RAUM · ↑ ÜBERSICHT</div>`;
+    this.panel.hidden = false;
+    if (this.onRoom) this.onRoom(room);
   }
 
   destroy() { this.token++; }
