@@ -51,7 +51,7 @@ export const CONFIG = {
 // status: nur Abweichungen eintragen – alles andere gilt als in Ordnung.
 //   'warn' (Warnung), 'damage' (Schaden), 'offline' (ohne Energie), 'sealed' (abgeriegelt)
 // info: optionaler Text, der bei Auswahl eines Raums erscheint.
-// Raum-IDs stehen im Infopanel des Terminals, z. B. XENO-2 oder WOHN-B3.04.
+// Raum-IDs stehen im Infopanel des Terminals, z. B. XENO-2, MARSHAL-11 oder WOHN-A3.
 export const STATION = {
   levels: [LEVEL0],
   status: {

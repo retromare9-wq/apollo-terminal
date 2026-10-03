@@ -40,11 +40,33 @@ for rm in d['rooms']:
     else:
         rooms.append(dict(zone=z,label=lab,rects=rects,lines=lines))
 
+# Wohneinheiten benennen: je Flügel die Blöcke von oben nach unten, je zwei Blöcke an einem Gang
+units=[r for r in rooms if r['zone']=='wohn' and not r['label']]
+for w,letters in (('L','ddee'),('R','aabb')):
+    ws=[r for r in units if (r['rects'][0][0]<2300)==(w=='L')]
+    tops={}
+    for r in ws:
+        if r.get('block'): tops[r['block']]=min(tops.get(r['block'],1e9), r['rects'][0][1])
+    order=sorted(tops,key=lambda k:tops[k])
+    grp={blk:letters[i] for i,blk in enumerate(order[:4])}
+    def g_of(r):
+        if r.get('block'): return grp.get(r['block'],'?')
+        near=min(order,key=lambda k:abs(tops[k]-r['rects'][0][1]))
+        return grp.get(near,'?')
+    counter={}
+    for r in sorted(ws,key=lambda r:(g_of(r), r['rects'][0][1]//40, r['rects'][0][0])):
+        g=g_of(r); counter[g]=counter.get(g,0)+1
+        r['unit']=f"{g.upper()}{counter[g]}"
+
 # IDs
 used=set()
 for i,r in enumerate(rooms):
     z=r['zone'].upper()
-    if r['label'] and r['label'] not in ('KANTINE','MARSHAL'):
+    if r.get('unit'):
+        rid=f"WOHN-{r['unit']}"
+    elif r['label']=='QUARTIER':
+        rid='MARSHAL-Q'
+    elif r['label'] and r['label']!='KANTINE':
         rid=f"{z}-{r['label']}"
     elif r['label']:
         rid=r['label']
@@ -168,7 +190,7 @@ def cams_in(r):
     return n
 for r in rooms: r['cams']=cams_in(r)
 out=dict(name='LEVEL 0',bounds=[min(xs),min(ys),max(xs),max(ys)],zones=ZN,
-         rooms=[dict(id=r['id'],zone=r['zone'],label=r['label'],rects=r['rects'],lines=r['lines'],cams=r['cams']) for r in rooms],
+         rooms=[dict(id=r['id'],zone=r['zone'],label=r['label'] or r.get('unit',''),unit=r.get('unit',''),rects=r['rects'],lines=r['lines'],cams=r['cams']) for r in rooms],
          corridors=corr,lifts=lifts,doors=doors,labels=labels)
 js="// Stationsplan Level 0, digitalisiert aus der handgezeichneten Karte.\n// Einheiten: Pixel des Fotos (≈ 20 px pro Meter). Erzeugt per Skript, bitte nicht von Hand umbauen.\nexport const LEVEL0 = "+json.dumps(out,ensure_ascii=False,separators=(',',':'))+";\n"
 open('level0.js','w').write(js)

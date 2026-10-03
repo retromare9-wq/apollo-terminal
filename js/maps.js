@@ -350,7 +350,7 @@ export class MapView {
     if (!q) return -1;
     const level = this.info.plan.level;
     return this.rooms().findIndex((r) => norm(r.id) === q || norm(roomName(level, r)) === q
-      || norm(r.id.replace('-', ' ')) === q);
+      || norm(r.id.replace('-', ' ')) === q || (r.unit && norm(r.unit) === q));
   }
 
   async focusRoom(i) {

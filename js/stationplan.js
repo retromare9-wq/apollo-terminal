@@ -8,7 +8,8 @@ const ASPECT = 446 / 1000;
 
 export function roomName(level, room) {
   const zone = level.zones[room.zone] || room.zone.toUpperCase();
-  if (room.label === 'KANTINE' || room.label === 'MARSHAL') return room.label;
+  if (room.label === 'KANTINE') return room.label;
+  if (room.unit) return `WOHNEINHEIT ${room.unit}`;
   if (room.label) return `${zone} ${room.label}`;
   return `${zone} ${room.id.split('-').slice(1).join('-')}`;
 }
@@ -53,7 +54,8 @@ function lift(g, l) {
   if (l.id) {
     const lx = horizontal ? x0 - 10 : (x0 + x1) / 2;
     const ly = horizontal ? (y0 + y1) / 2 : y0 - 12;
-    txt(g, lx, ly, l.id, 'st-liftid', { 'text-anchor': horizontal ? 'end' : 'middle', 'dominant-baseline': horizontal ? 'middle' : 'auto' });
+    const name = l.id === 'MF' ? 'MAINFRAME ▼ -1' : l.id;
+    txt(g, lx, ly, name, 'st-liftid', { 'text-anchor': horizontal ? 'end' : 'middle', 'dominant-baseline': horizontal ? 'middle' : 'auto' });
   }
 }
 
