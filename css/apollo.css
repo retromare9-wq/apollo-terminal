@@ -338,3 +338,6 @@ body.crt .crt-overlay::after {
 .st-room.sel .st-fill { fill: #12261b; }
 .sp-title { font-size: 17px; font-weight: 700; color: var(--yellow); margin: 2px 0 6px; }
 .sp-note { margin-top: 8px; border: 2px solid var(--rust-2); padding: 6px 8px; line-height: 1.4; }
+.sp-edit { margin-top: 8px; color: var(--mint); font-weight: 700; }
+.sp-edit .hl { background: var(--mint); }
+.star-panel.editing { border-color: var(--mint); }

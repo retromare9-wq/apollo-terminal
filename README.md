@@ -14,11 +14,15 @@ Interaktives Stationsterminal **A.P.O.L.L.O.** für ALIEN RPG: Die Spieler stell
 | A + Enter (Karte) | Zum markierten Ziel zoomen: Sternenkarte → System → Mond → Station |
 | Enter (leer) | Ausgewählten Punkt öffnen bzw. Textausgabe überspringen |
 | Esc | Zurück / Verbindung trennen |
+| ← → (Stationsplan) | Räume nacheinander auswählen; alternativ Raum-ID eintippen, z. B. `XENO-2` |
+| F2 | Bearbeitungsmodus (Spielleitung): im gewählten Raum **K** = Kamera an/aus, **S** = Status wechseln |
 | F9 | Ton an/aus |
 | F10 | Röhrenmonitor-Effekt an/aus |
 | F11 | Vollbild (Browser) |
 
 Während einer Karten-Animation überspringt jede Taste direkt zum Ziel.
+
+Änderungen aus dem Bearbeitungsmodus speichert der Browser des Geräts. Vorgaben: Status in `js/data.js` (`STATION.status`), Kameras aus den grünen Punkten der Zeichnung.
 
 ## Inhalte anpassen
 

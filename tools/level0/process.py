@@ -160,8 +160,15 @@ lifts=[dict(id=l['id'],rect=snr(l['rect']),dark=l['dark']) for l in d['lifts']]
 labels=d['labels']
 xs=[v for r in rooms for rc in r['rects'] for v in (rc[0],rc[2])]+[v for c in corr for v in (c[0],c[2])]
 ys=[v for r in rooms for rc in r['rects'] for v in (rc[1],rc[3])]+[v for c in corr for v in (c[1],c[3])]
+# Kameras: grüne Punkte der Zeichnung, die in einem Raum liegen
+def cams_in(r):
+    n=0
+    for x,y in d['dots']:
+        if any(rc[0]-15<=x<=rc[2]+15 and rc[1]-15<=y<=rc[3]+15 for rc in r['rects']): n+=1
+    return n
+for r in rooms: r['cams']=cams_in(r)
 out=dict(name='LEVEL 0',bounds=[min(xs),min(ys),max(xs),max(ys)],zones=ZN,
-         rooms=[dict(id=r['id'],zone=r['zone'],label=r['label'],rects=r['rects'],lines=r['lines']) for r in rooms],
+         rooms=[dict(id=r['id'],zone=r['zone'],label=r['label'],rects=r['rects'],lines=r['lines'],cams=r['cams']) for r in rooms],
          corridors=corr,lifts=lifts,doors=doors,labels=labels)
 js="// Stationsplan Level 0, digitalisiert aus der handgezeichneten Karte.\n// Einheiten: Pixel des Fotos (≈ 20 px pro Meter). Erzeugt per Skript, bitte nicht von Hand umbauen.\nexport const LEVEL0 = "+json.dumps(out,ensure_ascii=False,separators=(',',':'))+";\n"
 open('level0.js','w').write(js)
