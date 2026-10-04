@@ -1,0 +1,72 @@
+/* Karten-Editor (Spielleitung). Nutzt die Farben und Kartenstile aus apollo.css. */
+body.editor {
+  height: 100vh; overflow: hidden; user-select: none;
+  display: grid; grid-template-columns: 230px 1fr 320px; grid-template-rows: 54px 1fr 30px;
+  grid-template-areas: 'top top top' 'tools canvas props' 'status status status';
+  background: var(--bg); color: var(--amber); font-family: var(--font); font-size: 14px;
+}
+.editor button, .editor .btn {
+  font: 700 12px var(--font); letter-spacing: .06em; color: var(--amber); background: transparent;
+  border: 2px solid var(--amber); padding: 6px 10px; cursor: pointer; text-decoration: none; white-space: nowrap;
+}
+.editor button:hover, .editor .btn:hover { background: var(--amber); color: var(--ink); }
+.editor button.danger { border-color: var(--red); color: var(--red); }
+.editor button.danger:hover { background: var(--red); color: var(--ink); }
+.editor button:disabled { opacity: .35; cursor: default; background: transparent; color: var(--amber); }
+
+.ed-top { grid-area: top; display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 0 16px; border-bottom: 3px solid var(--amber); }
+.ed-title { font-weight: 700; font-size: 17px; letter-spacing: .08em; color: var(--yellow); white-space: nowrap; }
+.ed-title span { font-size: 13px; margin-left: 8px; }
+.ed-actions { display: flex; gap: 8px; align-items: center; flex-wrap: nowrap; }
+.ed-check { display: flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 700; margin: 0 6px; cursor: pointer; }
+.ed-check input { accent-color: var(--mint); }
+
+.ed-tools { grid-area: tools; border-right: 3px solid var(--amber); padding: 12px; overflow-y: auto; }
+.ed-head { background: var(--amber); color: var(--ink); font-weight: 700; padding: 2px 8px; margin: 4px 0 8px; letter-spacing: .08em; }
+.ed-tool { display: flex; width: 100%; gap: 10px; align-items: center; margin-bottom: 5px; text-align: left; }
+.ed-tool .k { color: var(--yellow); min-width: 14px; }
+.ed-tool.on { background: var(--yellow) !important; color: var(--ink) !important; border-color: var(--yellow); }
+.ed-tool.on .k { color: var(--ink); }
+.ed-secs { display: grid; gap: 5px; margin-bottom: 12px; }
+.ed-sec { display: flex; gap: 8px; align-items: center; text-align: left; }
+.ed-sec i { width: 14px; height: 14px; display: inline-block; }
+.ed-sec.on { outline: 2px solid var(--yellow); outline-offset: 1px; }
+.ed-help { font-size: 12px; line-height: 1.45; color: var(--amber-dim); }
+.ed-help b { color: var(--amber); }
+.ed-help p { margin: 0 0 8px; }
+
+.ed-canvas { grid-area: canvas; position: relative; overflow: hidden; background: #070403; }
+#map { width: 100%; height: 100%; display: block; cursor: crosshair; }
+#map.panning { cursor: grabbing; }
+#map.tool-select { cursor: default; }
+.ed-zoom { position: absolute; right: 12px; bottom: 12px; display: flex; flex-direction: column; gap: 6px; }
+.ed-zoom button { width: 36px; height: 36px; font-size: 18px; padding: 0; background: var(--bg); }
+.ed-toast { position: absolute; left: 50%; top: 14px; transform: translateX(-50%); background: var(--bg); border: 2px solid var(--yellow); color: var(--yellow); padding: 6px 14px; font-weight: 700; }
+
+.ed-props { grid-area: props; border-left: 3px solid var(--amber); padding: 12px; overflow-y: auto; }
+.ed-props h3 { margin: 0 0 8px; font-size: 16px; color: var(--yellow); letter-spacing: .06em; }
+.ed-row { display: flex; justify-content: space-between; gap: 10px; border-bottom: 1px solid var(--rust); padding: 3px 0; }
+.ed-field { display: block; margin: 10px 0; font-weight: 700; font-size: 12px; letter-spacing: .05em; }
+.ed-field input[type=text], .ed-field select, .ed-field textarea {
+  display: block; width: 100%; margin-top: 4px; background: #120905; color: var(--amber); border: 2px solid var(--amber-dim);
+  font: 500 14px var(--font); padding: 6px 8px; user-select: text;
+}
+.ed-field textarea { min-height: 90px; resize: vertical; }
+.ed-field input:focus, .ed-field select:focus, .ed-field textarea:focus { outline: none; border-color: var(--yellow); }
+.ed-field input[type=range] { width: 100%; accent-color: var(--mint); margin-top: 6px; }
+.ed-val { float: right; color: var(--yellow); }
+.ed-btns { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 12px; }
+.ed-note { font-size: 12px; color: var(--amber-dim); line-height: 1.45; margin-top: 10px; }
+
+.ed-status { grid-area: status; border-top: 3px solid var(--amber); display: flex; justify-content: space-between; align-items: center; padding: 0 14px; font-size: 12px; font-weight: 500; }
+
+/* Auswahl und Hilfsgrafik in der Karte */
+.ed-sel { filter: drop-shadow(0 0 4px #fff) drop-shadow(0 0 8px var(--yellow)); }
+line.ed-sel { stroke: var(--yellow); }
+.ed-ghost { opacity: .55; pointer-events: none; }
+.ed-preview { stroke: var(--yellow); stroke-width: 1.5; stroke-dasharray: 6 4; pointer-events: none; }
+.ed-handle { fill: var(--yellow); stroke: #0a0604; stroke-width: 1.5; cursor: grab; }
+.ed-snapdot { fill: var(--yellow); pointer-events: none; }
+.editor .ly-cam, .editor .ly-door, .editor .ly-hit { cursor: pointer; }
+.editor .st-room.sel .st-wall { stroke: var(--yellow); stroke-width: 3; }
+.editor .st-room.sel .st-fill { fill: #2a2110; }

@@ -312,10 +312,6 @@ body.crt .crt-overlay::after {
 .z-geo .st-fill { fill: #170e09; }
 .st-wall { fill: none; stroke: var(--amber); stroke-width: 1.6; }
 .st-inner { stroke: var(--amber-dim); stroke-width: 1; }
-.st-door-gap { stroke: #4a2012; stroke-width: 4; }
-.st-door { stroke: var(--mint); stroke-width: 1.4; stroke-dasharray: 2 2; opacity: .85; }
-.st-secure { fill: var(--red); }
-.st-normal { fill: #9a6ad0; }
 .st-shaft { fill: #0f0806; stroke: var(--amber-dim); stroke-width: 1; }
 .st-rung { stroke: var(--amber-dim); stroke-width: 1; }
 .st-car { fill: var(--yellow); stroke: var(--yellow); stroke-width: 1; }
@@ -338,6 +334,19 @@ body.crt .crt-overlay::after {
 .st-room.sel .st-fill { fill: #12261b; }
 .sp-title { font-size: 17px; font-weight: 700; color: var(--yellow); margin: 2px 0 6px; }
 .sp-note { margin-top: 8px; border: 2px solid var(--rust-2); padding: 6px 8px; line-height: 1.4; }
-.sp-edit { margin-top: 8px; color: var(--mint); font-weight: 700; }
-.sp-edit .hl { background: var(--mint); }
-.star-panel.editing { border-color: var(--mint); }
+
+/* ---------- Editierbare Ebene: Türen, Trennlinien, Kameras ---------- */
+:root { --sec-green: #6cc495; --sec-orange: #e8912d; --sec-red: #e0442c; --sep: #8d8680; }
+.ly-door { stroke: #0a0604; stroke-width: 1; }
+.ly-door.sec-green { fill: var(--sec-green); }
+.ly-door.sec-orange { fill: var(--sec-orange); }
+.ly-door.sec-red { fill: var(--sec-red); }
+.ly-line { stroke: var(--sep); stroke-width: 1.4; stroke-linecap: round; }
+.ly-hit { stroke: transparent; stroke-width: 12; }
+.ly-cone { pointer-events: none; stroke: rgba(108, 196, 149, .55); stroke-width: 1; stroke-dasharray: 3 3; }
+.ly-camdot { fill: var(--mint); stroke: #0a0604; stroke-width: 1.5; }
+.ly-camdir { stroke: var(--mint); stroke-width: 2.5; stroke-linecap: round; }
+.sec-t { font-weight: 700; }
+.sec-t.sec-green { color: var(--sec-green); }
+.sec-t.sec-orange { color: var(--sec-orange); }
+.sec-t.sec-red { color: var(--sec-red); }

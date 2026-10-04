@@ -15,14 +15,33 @@ Interaktives Stationsterminal **A.P.O.L.L.O.** für ALIEN RPG: Die Spieler stell
 | Enter (leer) | Ausgewählten Punkt öffnen bzw. Textausgabe überspringen |
 | Esc | Zurück / Verbindung trennen |
 | ← → (Stationsplan) | Räume nacheinander auswählen; alternativ Raum-ID eintippen, z. B. `XENO-2` |
-| F2 | Bearbeitungsmodus (Spielleitung): im gewählten Raum **K** = Kamera an/aus, **S** = Status wechseln |
 | F9 | Ton an/aus |
 | F10 | Röhrenmonitor-Effekt an/aus |
 | F11 | Vollbild (Browser) |
 
 Während einer Karten-Animation überspringt jede Taste direkt zum Ziel.
 
-Änderungen aus dem Bearbeitungsmodus speichert der Browser des Geräts. Vorgaben: Status in `js/data.js` (`STATION.status`), Kameras aus den grünen Punkten der Zeichnung.
+## Karten-Editor (Spielleitung)
+
+`editor.html` – Türen (Sicherheitsstufe Grün / Orange / Rot), graue Trennlinien, Kameras mit
+Sichtkegel (Richtung und Reichweite einstellbar, fester Öffnungswinkel) sowie Raumname, Status
+und Notiz eintragen.
+
+| Taste | Werkzeug |
+|---|---|
+| 1 | Auswahl / Verschieben (freie Fläche ziehen = Karte bewegen) |
+| 2 | Tür (in einen Gang oder an eine Raumwand klicken) |
+| 3 | Trennlinie (Anfang und Ende klicken) |
+| 4 | Kamera (gelben Punkt ziehen = Richtung und Reichweite) |
+| 5 | Raum benennen |
+| 6 | Radierer |
+| G / O / R | Sicherheitsstufe (auch für die gewählte Tür) |
+| Entf · Strg+Z · Strg+Y | Löschen · Rückgängig · Wiederholen |
+
+Gespeichert wird automatisch im Browser; ein offenes Terminal im selben Browser übernimmt
+Änderungen sofort. **Exportieren** lädt die Ebene als JSON-Datei herunter (Sicherung oder
+Übertragung auf ein anderes Gerät per **Importieren**). Eine exportierte Datei kann als
+Vorgabe in `js/station-layer0.js` übernommen werden.
 
 ## Inhalte anpassen
 
@@ -31,7 +50,7 @@ Alle Texte stehen in [`js/data.js`](js/data.js):
 - `CONFIG`: Namen von Station, Mond, Planet und System sowie die Begrüßung
 - `TOPICS`: Informationskategorien mit Schlüsselwörtern und Berichtsinhalt (Text, Warnungen, Tabellen, Balkenanzeigen)
 - `MENU`: Hauptmenü
-- `STATION`: Module und Gänge für den Stationsplan
+- `STATION`: Ebenen des Stationsplans (Grundriss aus `js/station-level0.js`, editierbare Ebene aus dem Karten-Editor)
 - `PERSONNEL`: Bewohner für das Interkom (optional mit Profilbild)
 
 Wörter wie KRITISCH, WARNUNG, OFFLINE oder NICHT ERREICHBAR werden in Berichten automatisch eingefärbt.

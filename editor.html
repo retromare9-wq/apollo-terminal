@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>A.P.O.L.L.O. Karten-Editor</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/apollo.css">
+  <link rel="stylesheet" href="css/editor.css">
+</head>
+<body class="editor">
+  <header class="ed-top">
+    <div class="ed-title">A.P.O.L.L.O. KARTEN-EDITOR <span id="ed-sub" class="dim"></span></div>
+    <div class="ed-actions">
+      <button id="undo" title="Strg+Z">↶ RÜCKGÄNGIG</button>
+      <button id="redo" title="Strg+Y">↷</button>
+      <label class="ed-check"><input type="checkbox" id="showcams"> KAMERAS IM TERMINAL</label>
+      <button id="export">EXPORTIEREN</button>
+      <button id="import">IMPORTIEREN</button>
+      <input type="file" id="importfile" accept=".json,application/json" hidden>
+      <button id="clear" class="danger">ALLES LÖSCHEN</button>
+      <a class="btn" href="./" target="apollo-terminal">TERMINAL ↗</a>
+    </div>
+  </header>
+
+  <aside class="ed-tools">
+    <div class="ed-head">WERKZEUG</div>
+    <div id="tools"></div>
+    <div class="ed-head">SICHERHEITSSTUFE</div>
+    <div id="secs" class="ed-secs"></div>
+    <div class="ed-help">
+      <p><b>Karte bewegen:</b> mit Rechtsklick ziehen oder im Auswahl-Werkzeug auf freier Fläche ziehen.</p>
+      <p><b>Zoomen:</b> Mausrad.</p>
+      <p><b>Löschen:</b> Objekt wählen und Entf drücken – oder Radierer.</p>
+      <p><b>Strg+Z</b> macht rückgängig.</p>
+      <p>Änderungen werden automatisch gespeichert und erscheinen sofort im Terminal, wenn es im selben Browser offen ist.</p>
+    </div>
+  </aside>
+
+  <main class="ed-canvas">
+    <svg id="map" xmlns="http://www.w3.org/2000/svg"></svg>
+    <div class="ed-zoom">
+      <button id="zin" title="Hineinzoomen">+</button>
+      <button id="zout" title="Herauszoomen">−</button>
+      <button id="zhome" title="Ganze Karte">⌂</button>
+    </div>
+    <div id="toast" class="ed-toast" hidden></div>
+  </main>
+
+  <aside class="ed-props" id="props"></aside>
+  <footer class="ed-status"><span id="hint"></span><span id="coords" class="dim"></span></footer>
+
+  <script type="module" src="js/editor.js"></script>
+</body>
+</html>

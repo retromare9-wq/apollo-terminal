@@ -13,9 +13,6 @@
   #map { display: block; width: 3600px; }
   .st-wall { stroke-width: 3; }
   .st-inner { stroke-width: 1.5; }
-  .st-door-gap { stroke-width: 7; }
-  .st-door { stroke-width: 2.5; }
-  .st-cam { fill: var(--mint); }
   .legend { display: flex; gap: 60px; margin-top: 24px; font-size: 26px; align-items: center; flex-wrap: wrap; }
   .legend span { display: inline-flex; align-items: center; }
   .legend i { display: inline-block; vertical-align: middle; margin-right: 14px; }
@@ -29,13 +26,16 @@
 <script type="module">
   import { CONFIG, STATION } from '../js/data.js';
   import { drawStationPlan } from '../js/stationplan.js';
+  import { loadLayer } from '../js/layer.js';
   import { el } from '../js/svg.js';
 
   const gm = new URLSearchParams(location.search).has('gm');
-  const level = STATION.levels[0];
+  const lv = STATION.levels[0];
+  const level = lv.plan;
+  const layer = loadLayer(lv.id, lv.layer);
   const svg = document.getElementById('map');
   const g = el('g', {}, svg);
-  const info = drawStationPlan(g, CONFIG, STATION, () => '');
+  drawStationPlan(g, CONFIG, level, layer, { cams: gm });
   const b = level.bounds;
   const pad = 140;
   const vb = { x: b[0] - pad, y: b[1] - pad, w: b[2] - b[0] + pad * 2 + 300, h: b[3] - b[1] + pad * 2 + 60 };
@@ -43,24 +43,19 @@
   svg.style.height = `${(3600 * vb.h) / vb.w}px`;
   svg.style.setProperty('--k', ((vb.w / 3600) * 2.4).toFixed(4));
 
-  if (gm) {
-    level.rooms.filter((r) => r.cams).forEach((r) => {
-      const [x0, y0, x1] = r.rects[0];
-      el('circle', { cx: x1 - 14, cy: y0 + 14, r: 8, class: 'st-cam' }, g);
-    });
-  }
-
   document.getElementById('title').textContent = `${CONFIG.station} // ${level.name}`;
   document.getElementById('sub').textContent =
     `${CONFIG.company} · ${CONFIG.moon} · ${CONFIG.planet} · ${CONFIG.star} · ${CONFIG.sector}${gm ? ' · SPIELLEITER-VERSION' : ''}`;
   const sw = (html) => `<svg width="70" height="34" viewBox="0 0 70 34">${html}</svg>`;
   document.getElementById('legend').innerHTML = [
     [sw('<rect x="2" y="2" width="66" height="30" fill="#4a2012"/>'), 'GANG'],
-    [sw('<rect x="2" y="2" width="66" height="30" fill="#140a05" stroke="#c8872a" stroke-width="3"/><line x1="22" y1="32" x2="48" y2="32" stroke="#4a2012" stroke-width="7"/><line x1="22" y1="32" x2="48" y2="32" stroke="#6cc495" stroke-width="2.5" stroke-dasharray="2 2"/>'), 'RAUM MIT TÜR'],
-    [sw('<rect x="2" y="2" width="66" height="30" fill="#4a2012"/><rect x="30" y="2" width="10" height="30" fill="#d0492f"/>'), 'GESICHERTE TÜR'],
-    [sw('<rect x="2" y="2" width="66" height="30" fill="#4a2012"/><rect x="32" y="2" width="6" height="30" fill="#9a6ad0"/>'), 'NORMALE TÜR'],
+    [sw('<rect x="2" y="2" width="66" height="30" fill="#140a05" stroke="#c8872a" stroke-width="3"/>'), 'RAUM'],
+    [sw('<rect x="2" y="2" width="66" height="30" fill="#4a2012"/><rect x="30" y="2" width="9" height="30" fill="#6cc495"/>'), 'TÜR GRÜN'],
+    [sw('<rect x="2" y="2" width="66" height="30" fill="#4a2012"/><rect x="30" y="2" width="9" height="30" fill="#e8912d"/>'), 'TÜR ORANGE'],
+    [sw('<rect x="2" y="2" width="66" height="30" fill="#4a2012"/><rect x="30" y="2" width="9" height="30" fill="#e0442c"/>'), 'TÜR ROT'],
+    [sw('<line x1="4" y1="17" x2="66" y2="17" stroke="#8d8680" stroke-width="2"/>'), 'TRENNLINIE'],
     [sw('<rect x="2" y="2" width="33" height="30" fill="#e3cb5c"/><path d="M8 8 L29 26 M29 8 L8 26" stroke="#1a0e05" stroke-width="2"/><rect x="35" y="2" width="33" height="30" fill="#0f0806" stroke="#7d5421"/><path d="M43 4 v26 M51 4 v26 M59 4 v26" stroke="#7d5421"/>'), 'AUFZUG + LEITERGANG'],
-    ...(gm ? [[sw('<circle cx="35" cy="17" r="10" fill="#6cc495"/>'), 'KAMERA IM RAUM']] : []),
+    ...(gm ? [[sw('<path d="M10 17 L60 2 A52 52 0 0 1 60 32 Z" fill="#6cc495" fill-opacity=".3"/><circle cx="10" cy="17" r="6" fill="#6cc495"/>'), 'KAMERA']] : []),
   ].map(([s, t]) => `<span>${s}${t}</span>`).join('');
   document.body.dataset.ready = '1';
 </script>

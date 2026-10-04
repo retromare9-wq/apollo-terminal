@@ -3,12 +3,14 @@
 // auf dem Bildschirm immer gleich groß bleiben.
 
 import { el, txt } from './svg.js';
+import { drawLayer } from './layer.js';
 
 const ASPECT = 446 / 1000;
 
-export function roomName(level, room) {
+export function roomName(level, room, layer) {
+  const custom = layer?.rooms?.[room.id]?.name;
+  if (custom) return custom.toUpperCase();
   const zone = level.zones[room.zone] || room.zone.toUpperCase();
-  if (room.label === 'KANTINE') return room.label;
   if (room.unit) return `WOHNEINHEIT ${room.unit}`;
   if (room.label) return `${zone} ${room.label}`;
   return `${zone} ${room.id.split('-').slice(1).join('-')}`;
@@ -59,25 +61,10 @@ function lift(g, l) {
   }
 }
 
-function door(g, d) {
-  const len = d.len || 25;
-  if (d.type === 'room') {
-    // Öffnung in der Wand mit kleinen Anschlägen
-    const a = d.o === 'h' ? { x1: d.x - len / 2, y1: d.y, x2: d.x + len / 2, y2: d.y } : { x1: d.x, y1: d.y - len / 2, x2: d.x, y2: d.y + len / 2 };
-    el('line', { ...a, class: 'st-door-gap' }, g);
-    el('line', { ...a, class: 'st-door' }, g);
-    return;
-  }
-  const t = d.type === 'secure' ? 10 : 6;
-  const r = d.o === 'h'
-    ? { x: d.x - len / 2, y: d.y - t / 2, width: len, height: t }
-    : { x: d.x - t / 2, y: d.y - len / 2, width: t, height: len };
-  el('rect', { ...r, class: d.type === 'secure' ? 'st-secure' : 'st-normal' }, g);
-}
-
-export function drawStationPlan(g, cfg, station, statusOf) {
-  const level = station.levels[0];
+// layer: editierbare Ebene (Türen, Linien, Kameras, Raumdaten), opts: { cams, editor }
+export function drawStationPlan(g, cfg, level, layer, opts = {}) {
   const [bx0, by0, bx1, by1] = level.bounds;
+  const statusOf = (id) => layer.rooms[id]?.status || '';
 
   const corr = el('g', { class: 'st-corrs' }, g);
   level.corridors.forEach(([x0, y0, x1, y1]) => el('rect', { x: x0, y: y0, width: x1 - x0, height: y1 - y0 }, corr));
@@ -93,8 +80,10 @@ export function drawStationPlan(g, cfg, station, statusOf) {
     nodes[room.id] = rg;
   });
 
-  const doorLayer = el('g', {}, g);
-  level.doors.forEach((d) => door(doorLayer, d));
+  const objects = drawLayer(el('g', {}, g), level, layer, {
+    cams: opts.cams ?? layer.settings.showCams,
+    editor: !!opts.editor,
+  });
 
   const liftLayer = el('g', {}, g);
   level.lifts.forEach((l) => lift(liftLayer, l));
@@ -104,9 +93,11 @@ export function drawStationPlan(g, cfg, station, statusOf) {
   level.rooms.forEach((room) => {
     const b = bbox(room.rects);
     const status = statusOf(room.id);
-    if (room.label) {
-      const big = room.label.length > 3;
-      txt(labelLayer, b[0] + 8, b[1] + 8, room.label, big ? 'st-name' : 'st-num', { 'dominant-baseline': 'hanging' });
+    const custom = layer.rooms[room.id]?.name;
+    const label = custom || room.label;
+    if (label) {
+      const big = label.length > 3;
+      txt(labelLayer, b[0] + 8, b[1] + 8, label.toUpperCase(), big ? 'st-name' : 'st-num', { 'dominant-baseline': 'hanging' });
     }
     if (status) {
       const sym = { warn: '▲', damage: '▲', offline: '■', sealed: '◆' }[status] || '▲';
@@ -133,6 +124,6 @@ export function drawStationPlan(g, cfg, station, statusOf) {
     target: { x: home.x + home.w / 2, y: home.y + home.h / 2 },
     home,
     noLock: true,
-    plan: { level, nodes },
+    plan: { level, layer, nodes, objects },
   };
 }

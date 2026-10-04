@@ -1,4 +1,5 @@
 import { LEVEL0 } from './station-level0.js';
+import { LAYER0 } from './station-layer0.js';
 
 // Alle Inhalte des Terminals. Texte, Namen und Werte hier ändern –
 // der restliche Code muss dafür nicht angefasst werden.
@@ -47,21 +48,10 @@ export const CONFIG = {
   ],
 };
 
-// Stationsplan: digitalisierte Ebenen (siehe js/station-level0.js).
-// status: nur Abweichungen eintragen – alles andere gilt als in Ordnung.
-//   'warn' (Warnung), 'damage' (Schaden), 'offline' (ohne Energie), 'sealed' (abgeriegelt)
-// info: optionaler Text, der bei Auswahl eines Raums erscheint.
-// Raum-IDs stehen im Infopanel des Terminals, z. B. XENO-2, MARSHAL-11 oder WOHN-A3.
+// Stationsplan: Grundriss je Ebene (js/station-level0.js) und editierbare Ebene
+// (Türen, Trennlinien, Kameras, Raumnamen/-status). Bearbeitet wird im Karten-Editor (editor.html).
 export const STATION = {
-  levels: [LEVEL0],
-  status: {
-    'XENO-2': 'damage',
-    'TECH-6': 'warn',
-  },
-  info: {
-    'XENO-2': 'DRUCKVERLUST. SCHOTT VERRIEGELT. ZUTRITT NUR MIT SCHUTZANZUG.',
-    'TECH-6': 'KÜHLKREISLAUF 2 MELDET DRUCKABFALL.',
-  },
+  levels: [{ id: 'level0', plan: LEVEL0, layer: LAYER0 }],
 };
 
 // Informationskategorien.

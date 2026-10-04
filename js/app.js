@@ -18,7 +18,6 @@ const state = {
   typing: null,
   map: null,
   chat: null,
-  edit: false,
 };
 
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -63,7 +62,7 @@ function initChrome() {
 }
 
 function updateFlags() {
-  $('#f-snd').innerHTML = `${state.edit ? '<span class="mint">EDIT</span> ' : ''}SND ${sound.enabled ? 'ON' : 'OFF'}`;
+  $('#f-snd').textContent = `SND ${sound.enabled ? 'ON' : 'OFF'}`;
 }
 
 // ---------- Schreibmaschinen-Effekt ----------
@@ -265,7 +264,6 @@ function showMap(topic) {
       else setHint(info.next ? `A+⏎ ${info.next} · ↑ ZURÜCK · ESC MENÜ` : '↑ ZURÜCK · ESC MENÜ');
     },
   });
-  state.map.setEdit(state.edit);
   state.map.show(LEVELS.indexOf(topic.level));
 }
 
@@ -489,19 +487,6 @@ function onKey(e) {
   if (!state.ready) return;
   if (e.key === 'F9') { e.preventDefault(); sound.toggle(); updateFlags(); return; }
   if (e.key === 'F10') { e.preventDefault(); document.body.classList.toggle('crt'); return; }
-  if (e.key === 'F2') {
-    e.preventDefault();
-    state.edit = !state.edit;
-    document.body.classList.toggle('edit-mode', state.edit);
-    if (state.map) state.map.setEdit(state.edit);
-    sound.beep();
-    updateFlags();
-    return;
-  }
-  if (state.edit && !state.buffer && state.view === 'map' && state.map?.editKey(e.key.toLowerCase())) {
-    e.preventDefault();
-    return;
-  }
   if (e.ctrlKey || e.metaKey || e.altKey) return;
   if (state.busy) { e.preventDefault(); return; }
   if (state.view === 'map' && state.map?.animating && e.key !== 'Escape') {
@@ -544,6 +529,11 @@ function onKey(e) {
 }
 
 // ---------- Start ----------
+
+// Änderungen aus dem Karten-Editor (anderes Fenster) live übernehmen
+addEventListener('storage', (e) => {
+  if (e.key && e.key.startsWith('apollo.map.') && state.view === 'map') state.map?.redrawStation();
+});
 
 async function main() {
   fit();

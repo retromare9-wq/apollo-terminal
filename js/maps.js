@@ -5,7 +5,7 @@
 import { el, txt, rng } from './svg.js';
 import { drawStarmap, SOL } from './starmap.js';
 import { drawStationPlan, roomName, frame } from './stationplan.js';
-import { statusOf, camsOf, cycleStatus, toggleCams } from './overrides.js';
+import { loadLayer, roomDoors, roomCams, SECURITY } from './layer.js';
 
 export const W = 1000;
 export const H = 446;
@@ -141,7 +141,8 @@ function drawMoon(g, cfg) {
 }
 
 function drawStation(g, cfg, station) {
-  return drawStationPlan(g, cfg, station, (id) => statusOf(station, id));
+  const lv = station.levels[0];
+  return drawStationPlan(g, cfg, lv.plan, loadLayer(lv.id, lv.layer));
 }
 
 const DRAW = { stars: drawStarmap, system: drawSystem, moon: drawMoon, station: drawStation };
@@ -349,7 +350,7 @@ export class MapView {
     const q = norm(query);
     if (!q) return -1;
     const level = this.info.plan.level;
-    return this.rooms().findIndex((r) => norm(r.id) === q || norm(roomName(level, r)) === q
+    return this.rooms().findIndex((r) => norm(r.id) === q || norm(roomName(level, r, this.info.plan.layer)) === q
       || norm(r.id.replace('-', ' ')) === q || (r.unit && norm(r.unit) === q));
   }
 
@@ -380,57 +381,41 @@ export class MapView {
   }
 
   showRoom(room, level) {
-    const status = statusOf(this.station, room.id);
-    const cams = camsOf(room);
+    const layer = this.info.plan.layer;
+    const data = layer.rooms[room.id] || {};
     const st = {
       warn: '<span class="warn">▲ WARNUNG</span>',
       damage: '<span class="crit blink">▲ SCHADEN</span>',
       offline: '<span class="crit">■ OFFLINE</span>',
       sealed: '<span class="crit">◆ ABGERIEGELT</span>',
-    }[status] || 'IN ORDNUNG';
-    const doors = level.doors.filter((d) => d.type === 'room' && room.rects.some(([x0, y0, x1, y1]) => d.x >= x0 - 2 && d.x <= x1 + 2 && d.y >= y0 - 2 && d.y <= y1 + 2)).length;
-    const info = this.station.info[room.id];
+    }[data.status] || 'IN ORDNUNG';
+    const doors = roomDoors(layer, room);
+    const levels = ['green', 'orange', 'red'].filter((k) => doors.some((d) => (d.sec || 'green') === k));
+    const cams = layer.settings.showCams ? roomCams(layer, room).length : 0;
+    const esc = (t) => String(t).replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
     this.panel.innerHTML = `
       <div class="sp-head">RAUMDATEN</div>
-      <div class="sp-title">${roomName(level, room)}</div>
+      <div class="sp-title">${esc(roomName(level, room, layer))}</div>
       <div class="sp-row"><span class="dim">ID</span><span>${room.id}</span></div>
       <div class="sp-row"><span class="dim">BEREICH</span><span>${level.zones[room.zone] || room.zone}</span></div>
       <div class="sp-row"><span class="dim">EBENE</span><span>${level.name}</span></div>
-      <div class="sp-row"><span class="dim">ZUGÄNGE</span><span>${doors}</span></div>
+      <div class="sp-row"><span class="dim">ZUGÄNGE</span><span>${doors.length}${levels.length ? ` · ${levels.map((k) => `<span class="sec-t sec-${k}">${SECURITY[k].label}</span>`).join(' ')}` : ''}</span></div>
       <div class="sp-row"><span class="dim">STATUS</span><span>${st}</span></div>
-      <div class="sp-row"><span class="dim">ÜBERWACHUNG</span><span>${cams ? `<span class="mint">KAMERA AKTIV${cams > 1 ? ` (${cams})` : ''}</span>` : 'KEINE KAMERA'}</span></div>
-      ${info ? `<div class="sp-note">${info}</div>` : ''}
-      ${this.edit ? '<div class="sp-edit">BEARBEITUNG: <span class="hl">K</span> KAMERA · <span class="hl">S</span> STATUS</div>' : ''}
+      ${layer.settings.showCams ? `<div class="sp-row"><span class="dim">ÜBERWACHUNG</span><span>${cams ? `<span class="mint">KAMERA AKTIV${cams > 1 ? ` (${cams})` : ''}</span>` : 'KEINE KAMERA'}</span></div>` : ''}
+      ${data.info ? `<div class="sp-note">${esc(data.info)}</div>` : ''}
       <div class="sp-key">←→ RAUM · ↑ ÜBERSICHT</div>`;
-    this.panel.classList.toggle('editing', !!this.edit);
     this.panel.hidden = false;
     if (this.onRoom) this.onRoom(room);
   }
 
-  setEdit(on) {
-    this.edit = on;
-    this.root.classList.toggle('editing', on);
-    if (this.sel != null) this.showRoom(this.rooms()[this.sel], this.info.plan.level);
-  }
-
-  // Bearbeitung des gewählten Raums; true, wenn die Taste verarbeitet wurde
-  editKey(key) {
-    if (!this.edit || this.sel == null || !this.info?.plan) return false;
-    const room = this.rooms()[this.sel];
-    if (key === 'k') toggleCams(room);
-    else if (key === 's') cycleStatus(this.station, room.id);
-    else return false;
-    this.sound.confirm();
-    this.redrawStation();
-    return true;
-  }
-
   // Ebene neu zeichnen, Auswahl und Ausschnitt behalten
   redrawStation() {
+    if (!this.info?.plan || this.animating) return;
     const sel = this.sel;
     const vb = this.vb;
     this.draw(this.level);
     this.setVB(vb);
+    if (sel == null) return;
     this.sel = sel;
     const room = this.rooms()[sel];
     this.info.plan.nodes[room.id].classList.add('sel');

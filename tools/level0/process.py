@@ -4,7 +4,7 @@ d=json.load(open('level0_px.json'))
 sn=lambda v: int(round(v/S)*S)
 snr=lambda r:[sn(r[0]),sn(r[1]),sn(r[2]),sn(r[3])]
 
-ZN={'med':'KRANKENSTATION','wohn':'WOHNBEREICHE','lager':'LAGERRÄUME','zivil':'ZIVILRÄUME','admin':'ADMINISTRATION',
+ZN={'kantine':'KANTINE','med':'KRANKENSTATION','wohn':'WOHNBEREICHE','lager':'LAGERRÄUME','zivil':'ZIVILRÄUME','admin':'ADMINISTRATION',
     'xeno':'XENOBIOLOGIE','oneiro':'ONEIROLOGIE','klima':'KLIMATOLOGIE','marshal':'MARSHAL','fe':'F&E ADMIN','geo':'GEOLOGIE','tech':'TECHNIK & SYSTEME'}
 
 corr=[snr(r) for r in d['corr']]
@@ -189,10 +189,12 @@ def cams_in(r):
         if any(rc[0]-15<=x<=rc[2]+15 and rc[1]-15<=y<=rc[3]+15 for rc in r['rects']): n+=1
     return n
 for r in rooms: r['cams']=cams_in(r)
+doors=[]
+for r in rooms: r['cams']=0
 out=dict(name='LEVEL 0',bounds=[min(xs),min(ys),max(xs),max(ys)],zones=ZN,
-         rooms=[dict(id=r['id'],zone=r['zone'],label=r['label'] or r.get('unit',''),unit=r.get('unit',''),rects=r['rects'],lines=r['lines'],cams=r['cams']) for r in rooms],
+         rooms=[dict(id=r['id'],zone=r['zone'],label=r['label'] or r.get('unit',''),unit=r.get('unit',''),rects=r['rects'],lines=r['lines']) for r in rooms],
          corridors=corr,lifts=lifts,doors=doors,labels=labels)
-js="// Stationsplan Level 0, digitalisiert aus der handgezeichneten Karte.\n// Einheiten: Pixel des Fotos (≈ 20 px pro Meter). Erzeugt per Skript, bitte nicht von Hand umbauen.\nexport const LEVEL0 = "+json.dumps(out,ensure_ascii=False,separators=(',',':'))+";\n"
+js="// Stationsplan Level 0, digitalisiert aus der handgezeichneten Karte.\n// Einheiten: ≈ 20 pro Meter. Nur Grundriss (Räume, Gänge, Aufzüge) – Türen, Trennlinien,\n// Kameras und Raumnamen kommen aus dem Karten-Editor. Erzeugt per Skript (tools/level0).\nexport const LEVEL0 = "+json.dumps(out,ensure_ascii=False,separators=(',',':'))+";\n"
 open('level0.js','w').write(js)
 print(len(rooms),'rooms',len(corr),'corr',len([x for x in doors if x['type']=='room']),'room doors', sum(1 for r in rooms if count[r['id']]==0),'rooms w/o door')
 print([r['id'] for r in rooms if count[r['id']]==0][:40])
