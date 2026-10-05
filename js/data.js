@@ -22,6 +22,9 @@ export const CONFIG = {
   // Sternenkarte: Datenpanel und Legende
   starmap: {
     distancePc: 38.41,
+    // Namen der Sternensysteme { s1: { name, sub } } und Sektoren { k1: 'NAME' } – im Editor vergeben
+    systems: {},
+    sectors: {},
     rows: [
       ['SECTOR', 'BORODINO SECTOR'],
       ['SYSTEM', 'DS282 // K3 V'],
@@ -93,6 +96,7 @@ export const TOPICS = [
     id: 'schaden',
     title: 'SCHADENSBERICHT',
     view: 'damage',
+    access: 'orange',
     example: 'GIBT ES SCHÄDEN AUF DER STATION?',
     keywords: ['schaden', 'schäden', 'beschädig', 'defekt', 'kaputt', 'leck', 'hüllenbruch', 'bruch', 'riss',
       'reparatur', 'zerstör', 'damage', 'zwischenfall', 'störung', 'integrität'],
@@ -115,6 +119,7 @@ export const TOPICS = [
     id: 'lebenserhaltung',
     title: 'LEBENSERHALTUNG',
     view: 'report',
+    access: 'orange',
     example: 'WIE IST DIE LUFTQUALITÄT?',
     keywords: ['lebenserhaltung', 'sauerstoff', 'o2', 'co2', 'kohlendioxid', 'atemluft', 'luft', 'atmosphäre',
       'temperatur', 'luftdruck', 'druck', 'life support', 'wasser', 'filter', 'atmen'],
@@ -142,6 +147,7 @@ export const TOPICS = [
     id: 'energie',
     title: 'ENERGIEVERSORGUNG',
     view: 'report',
+    access: 'orange',
     example: 'WIE LÄUFT DER REAKTOR?',
     keywords: ['energie', 'strom', 'reaktor', 'generator', 'batterie', 'akku', 'power', 'leistung', 'kraftwerk',
       'kühlung', 'kühlkreislauf', 'notstrom'],
@@ -168,6 +174,7 @@ export const TOPICS = [
     id: 'status',
     title: 'STATIONSSTATUS',
     view: 'report',
+    access: 'orange',
     example: 'WIE IST DIE LAGE?',
     keywords: ['status', 'lagebericht', 'übersicht', 'zustand', 'systemstatus', 'systeme', 'überblick'],
     weak: ['bericht', 'lage', 'situation', 'ausfall', 'alles'],
@@ -192,6 +199,7 @@ export const TOPICS = [
     id: 'personal',
     title: 'PERSONALREGISTER',
     view: 'report',
+    access: 'orange',
     example: 'WER IST AUF DER STATION?',
     keywords: ['personal', 'besatzung', 'crew', 'bewohner', 'mitarbeiter', 'personen', 'leute', 'team',
       'wer ist', 'wer arbeitet', 'anwesend', 'manifest'],
@@ -210,13 +218,14 @@ export const TOPICS = [
           ['LENA KOWALSKI', 'LOGISTIK', 'NICHT ERREICHBAR'],
         ],
       },
-      { type: 'text', text: 'KONTAKTAUFNAHME ÜBER INTERKOM: MENÜPUNKT [H].' },
+      { type: 'text', text: 'KONTAKTAUFNAHME ÜBER INTERKOM.' },
     ],
   },
   {
     id: 'apollo',
     title: 'SYSTEMIDENTIFIKATION',
     view: 'report',
+    access: 'orange',
     example: 'WER BIST DU?',
     keywords: ['apollo', 'a p o l l o', 'wer bist', 'wer sind sie', 'identität', 'computer', 'ki', 'künstliche'],
     weak: [],
@@ -230,6 +239,7 @@ export const TOPICS = [
     id: 'stationsplan',
     title: 'STATIONSPLAN',
     view: 'map',
+    access: 'green',
     level: 'station',
     example: 'ZEIG MIR DEN LAGEPLAN.',
     keywords: ['stationsplan', 'lageplan', 'grundriss', 'plan', 'deck', 'räume', 'modul', 'wo ist', 'wo befindet',
@@ -240,6 +250,7 @@ export const TOPICS = [
     id: 'mond',
     title: 'MONDKARTE',
     view: 'map',
+    access: 'green',
     level: 'moon',
     example: 'WAS IST AUF DER MONDOBERFLÄCHE?',
     keywords: ['mond', 'oberfläche', 'gelände', 'terrain', 'krater', 'topographie', 'umgebung', 'draußen', 'außen',
@@ -250,6 +261,7 @@ export const TOPICS = [
     id: 'sonnensystem',
     title: 'SONNENSYSTEM',
     view: 'map',
+    access: 'green',
     level: 'system',
     example: 'WELCHE PLANETEN GIBT ES HIER?',
     keywords: ['sonnensystem', 'systemkarte', 'planet', 'planeten', 'umlaufbahn', 'orbit', 'sonne', 'gasriese', 'carpenter', CONFIG.star],
@@ -259,6 +271,7 @@ export const TOPICS = [
     id: 'sterne',
     title: 'STERNENKARTE',
     view: 'map',
+    access: 'green',
     level: 'stars',
     example: 'WO BEFINDEN WIR UNS?',
     keywords: ['sternenkarte', 'stern', 'galaxie', 'galaktisch', 'navigation', 'koordinaten', 'position',
@@ -269,31 +282,65 @@ export const TOPICS = [
     id: 'interkom',
     title: 'INTERKOM',
     view: 'interkom',
+    access: 'green',
     example: 'ICH MÖCHTE JEMANDEN ANRUFEN.',
     keywords: ['interkom', 'intercom', 'anruf', 'rufen', 'kontakt', 'nachricht', 'funk', 'sprechen', 'verbindung',
       'erreichen', 'melden', 'schreiben', 'chat'],
     weak: ['reden', 'telefon'],
   },
   {
+    id: 'kommlog',
+    title: 'KOMMLOG',
+    view: 'commlog',
+    access: 'orange',
+    example: 'ZEIG MIR DIE LETZTEN NACHRICHTEN.',
+    keywords: ['kommlog', 'commlog', 'logbuch', 'nachrichten', 'funkverkehr', 'kommunikation', 'übertragung',
+      'protokoll', 'mails', 'mail', 'posteingang', 'gesendet', 'empfangen'],
+    weak: ['log', 'brief'],
+  },
+  {
+    id: 'systeme',
+    title: 'ZUGRIFF STATIONSSYSTEME',
+    view: 'systems',
+    access: 'red',
+    example: 'ZUGRIFF AUF DIE STATIONSSYSTEME.',
+    keywords: ['stationssysteme', 'steuerung', 'kontrolle', 'systemzugriff', 'fernsteuerung', 'schotts', 'schleuse', 'override'],
+    weak: ['zugriff', 'steuern'],
+  },
+  {
+    id: 'selbstzerstoerung',
+    title: 'SELBSTZERSTÖRUNG EINLEITEN',
+    view: 'selfdestruct',
+    access: 'mainframe',
+    example: 'SELBSTZERSTÖRUNG EINLEITEN.',
+    keywords: ['selbstzerstörung', 'selbstzerst', 'self destruct', 'sprengung', 'detonation', 'kernschmelze'],
+    weak: [],
+  },
+  {
     id: 'hilfe',
     title: 'HILFE',
     view: 'help',
+    access: 'green',
     keywords: ['hilfe', 'help', 'befehle', 'kommandos', 'anleitung', 'was kannst', 'optionen', 'funktionen'],
     weak: [],
   },
 ];
 
-// Hauptmenü: Taste → Kategorie
+// Hauptmenü: Reihenfolge der Kategorien. Die Tasten (A, B, C …) vergibt das Terminal
+// automatisch nach den Punkten, die die aktuelle Zugangsstufe sehen darf.
 export const MENU = [
-  { key: 'A', label: 'SCHADENSBERICHT', topic: 'schaden' },
-  { key: 'B', label: 'LEBENSERHALTUNG', topic: 'lebenserhaltung' },
-  { key: 'C', label: 'ENERGIEVERSORGUNG', topic: 'energie' },
-  { key: 'D', label: 'STATIONSPLAN', topic: 'stationsplan' },
-  { key: 'E', label: 'MONDKARTE TWEX9', topic: 'mond' },
-  { key: 'F', label: 'SYSTEMKARTE DS282', topic: 'sonnensystem' },
-  { key: 'G', label: 'STERNENKARTE', topic: 'sterne' },
-  { key: 'H', label: 'INTERKOM', topic: 'interkom' },
-  { key: 'I', label: 'HILFE', topic: 'hilfe' },
+  { label: 'SCHADENSBERICHT', topic: 'schaden' },
+  { label: 'LEBENSERHALTUNG', topic: 'lebenserhaltung' },
+  { label: 'ENERGIEVERSORGUNG', topic: 'energie' },
+  { label: 'STATIONSPLAN', topic: 'stationsplan' },
+  { label: 'MONDKARTE TWEX9', topic: 'mond' },
+  { label: 'SYSTEMKARTE DS282', topic: 'sonnensystem' },
+  { label: 'STERNENKARTE', topic: 'sterne' },
+  { label: 'INTERKOM', topic: 'interkom' },
+  { label: 'KOMMLOG', topic: 'kommlog' },
+  { label: 'ZUGRIFF STATIONSSYSTEME', topic: 'systeme' },
+  { label: 'SELBSTZERSTÖRUNG EINLEITEN', topic: 'selbstzerstoerung' },
+  { label: 'HILFE', topic: 'hilfe' },
 ];
 
 // Stationsbewohner für das Interkom. image: Pfad zu einem Bild, z. B. 'img/reyes.jpg', oder null.
@@ -313,3 +360,65 @@ export const DEMO_REPLIES = [
   'DAS KANN ICH ÜBER DIE LEITUNG NICHT SAGEN. KOMMEN SIE VORBEI.',
   'MOMENT … ICH MELDE MICH GLEICH WIEDER.',
 ];
+
+// Zugangsstufen. green < orange < red < mainframe (nur am Mainframe im Computerraum)
+export const ACCESS = {
+  green: 'GRÜN',
+  orange: 'ORANGE',
+  red: 'ROT',
+  mainframe: 'ROT // MAINFRAME',
+};
+
+// KOMMLOG: ein- und ausgehende Kommunikation der Station.
+// access: green | orange | red · sent: versendet ja/nein · image: Absenderbild (im Editor hochladen)
+export const COMMLOG = [
+  {
+    date: '2183.03.02', time: '08:14', from: 'MARCUS HOLT', to: 'WY KONZERNZENTRALE // GATEWAY',
+    subject: 'QUARTALSBERICHT ON-TWEX9', access: 'green', sent: true, image: '',
+    text: 'ANBEI DER QUARTALSBERICHT. FÖRDERQUOTE ERFÜLLT. PERSONAL VOLLZÄHLIG. VERSORGUNGSFLUG BESTÄTIGT.',
+  },
+  {
+    date: '2183.03.09', time: '22:41', from: 'DR. ELENA REYES', to: 'WY SPECIAL PROJECTS',
+    subject: 'PROBE 7 // BEFUND', access: 'orange', sent: true, image: '',
+    text: 'PROBE 7 ZEIGT ZELLULÄRE AKTIVITÄT TROTZ KRYOLAGERUNG. ERBITTE ANWEISUNGEN ZUR WEITEREN UNTERSUCHUNG.',
+  },
+  {
+    date: '2183.03.10', time: '03:02', from: 'WY SPECIAL PROJECTS', to: 'DR. ELENA REYES',
+    subject: 'RE: PROBE 7 // BEFUND', access: 'red', sent: true, image: '',
+    text: 'UNTERSUCHUNG FORTSETZEN. PRIORITÄT EINS. INFORMATIONEN NICHT AN DAS STATIONSPERSONAL WEITERGEBEN. ALLE ANDEREN PRIORITÄTEN AUFGEHOBEN.',
+  },
+  {
+    date: '2183.03.14', time: '17:55', from: 'VIKTOR SAND', to: 'COLONIAL MARSHAL BUREAU',
+    subject: 'ANFRAGE UNTERSTÜTZUNG', access: 'orange', sent: false, image: '',
+    text: 'ERBITTE DRINGEND UNTERSTÜTZUNG. VORFALL IN XENOBIOLOGIE 2. DETAILS FOLGEN. — ÜBERTRAGUNG DURCH STATIONSLEITUNG GESPERRT.',
+  },
+];
+
+// ZUGRIFF STATIONSSYSTEME: Schaltflächen (noch ohne Funktion)
+export const SYSTEMS = [
+  'LEBENSERHALTUNG', 'REAKTORSTEUERUNG', 'ENERGIEVERTEILUNG', 'NOTSTROM',
+  'SCHOTTS & TÜREN', 'LUFTSCHLEUSEN', 'AUFZÜGE', 'BELEUCHTUNG',
+  'KAMERANETZ', 'SENSORNETZ', 'KOMMUNIKATION', 'FEUERUNTERDRÜCKUNG',
+];
+
+// SELBSTZERSTÖRUNG (nur am Mainframe)
+export const SELFDESTRUCT = {
+  intro: [
+    'SELBSTZERSTÖRUNGSPROTOKOLL // FUSIONSREAKTOR',
+    'DIESE FUNKTION FÜHRT ZUR VOLLSTÄNDIGEN ZERSTÖRUNG DER STATION.',
+  ],
+  codePrompt: 'AUTORISIERUNGSCODE EINGEBEN:',
+  codeOk: 'CODE AKZEPTIERT.',
+  confirm: 'SIND SIE SICHER, DASS SIE FORTFAHREN WOLLEN? (JA / NEIN)',
+  cancelled: 'VORGANG ABGEBROCHEN. KEINE ÄNDERUNGEN VORGENOMMEN.',
+  sequence: [
+    'SELBSTZERSTÖRUNG EINGELEITET.',
+    'KÜHLKREISLÄUFE 1–4 WERDEN ABGESCHALTET …',
+    'MAGNETISCHE EINDÄMMUNG DES REAKTORKERNS DEAKTIVIERT.',
+    'ÜBERLASTSICHERUNGEN ÜBERBRÜCKT.',
+    'ALLES PERSONAL ZU DEN RETTUNGSKAPSELN.',
+  ],
+  minutes: 10,
+  countdownLabel: 'REAKTORDETONATION IN',
+  final: 'SIGNAL VERLOREN',
+};

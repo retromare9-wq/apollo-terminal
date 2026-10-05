@@ -1,24 +1,15 @@
-// Sternenkarte im Retro-Stil, nachempfunden der Karte des Grenzgebiets.
-// Koordinaten entsprechen grob der Vorlage (Sol liegt links unten außerhalb).
+// Sternenkarte im Terminal-Stil, nachgebaut nach der Vorlage (Gebiete, Ringe, Raster, Sektoren).
+// Namen der Systeme und Sektoren stammen aus dem Editor (CONFIG.starmap.systems / .sectors).
 
-import { el, txt, rng, smooth } from './svg.js';
+import { el, txt, rng } from './svg.js';
+import { STARMAP } from './starmap-data.js';
 
-export const SOL = { x: -13, y: 640 };
-const R_CORE = 300;
-const R_VEIL = 362;
-const R_RIM = 550;
-const R_EDGE = 592;
-const BOUNDS = { x: -1300, y: -900, w: 2900, h: 2500 };
+export const S = 2; // Karteneinheiten pro Pixel der Vorlage
+const P = (x, y) => ({ x: x * S, y: y * S });
+export const SOL = P(...STARMAP.sol);
 
-const circlePath = (c, r) => `M${c.x - r} ${c.y} A${r} ${r} 0 1 0 ${c.x + r} ${c.y} A${r} ${r} 0 1 0 ${c.x - r} ${c.y} Z`;
-const ringPath = (c, r1, r2) => `${circlePath(c, r2)} ${circlePath(c, r1)}`;
-const polar = (c, r, deg) => ({ x: c.x + r * Math.cos((deg * Math.PI) / 180), y: c.y + r * Math.sin((deg * Math.PI) / 180) });
-
-function arcPath(c, r, a1, a2) {
-  const p1 = polar(c, r, a1);
-  const p2 = polar(c, r, a2);
-  return `M${p1.x} ${p1.y} A${r} ${r} 0 0 1 ${p2.x} ${p2.y}`;
-}
+const pathOf = (pts) => `M${pts.map(([x, y]) => `${x * S} ${y * S}`).join('L')}Z`;
+const circle = (c, r) => `M${c.x - r} ${c.y} A${r} ${r} 0 1 0 ${c.x + r} ${c.y} A${r} ${r} 0 1 0 ${c.x - r} ${c.y} Z`;
 
 function sparkle(x, y, s) {
   const k = s * 0.22;
@@ -28,100 +19,130 @@ function sparkle(x, y, s) {
 function patterns(defs) {
   const dots = el('pattern', { id: 'pt-dots', width: 8, height: 8, patternUnits: 'userSpaceOnUse' }, defs);
   el('circle', { cx: 4, cy: 4, r: 1.4, class: 'sm-dotfill' }, dots);
-  const stripes = el('pattern', { id: 'pt-stripes', width: 10, height: 6, patternUnits: 'userSpaceOnUse' }, defs);
-  el('rect', { x: 0, y: 0, width: 10, height: 2.4, class: 'sm-stripefill' }, stripes);
+  const stripes = el('pattern', { id: 'pt-stripes', width: 12, height: 9, patternUnits: 'userSpaceOnUse' }, defs);
+  el('rect', { x: 0, y: 0, width: 12, height: 5, class: 'sm-stripefill' }, stripes);
   const hatch = el('pattern', { id: 'pt-hatch', width: 7, height: 7, patternUnits: 'userSpaceOnUse', patternTransform: 'rotate(45)' }, defs);
-  el('rect', { x: 0, y: 0, width: 2, height: 7, class: 'sm-hatchfill' }, hatch);
-  const clip = el('clipPath', { id: 'outside-veil' }, defs);
-  el('path', {
-    d: `M${BOUNDS.x} ${BOUNDS.y} H${BOUNDS.x + BOUNDS.w} V${BOUNDS.y + BOUNDS.h} H${BOUNDS.x} Z ${circlePath(SOL, R_VEIL)}`,
-    'clip-rule': 'evenodd',
-  }, clip);
+  el('rect', { x: 0, y: 0, width: 2.5, height: 7, class: 'sm-hatchfill' }, hatch);
+}
+
+export function systemName(cfg, sys) {
+  if (sys.id === STARMAP.targetId) return cfg.starmap?.systems?.[sys.id]?.name || cfg.star;
+  return cfg.starmap?.systems?.[sys.id]?.name || '';
+}
+
+export function sectorName(cfg, sec) {
+  if (sec.target) return cfg.starmap?.sectors?.[sec.id] || cfg.sector;
+  return cfg.starmap?.sectors?.[sec.id] || '';
+}
+
+// Zeichnet die Karte; opts.editor = Systeme/Sektoren anklickbar (Editor)
+export function drawStarmapLayer(world, cfg, opts = {}) {
+  const r = rng(282);
+  const defs = el('defs', {}, world);
+  patterns(defs);
+  const [fx0, fy0, fx1, fy1] = STARMAP.frame;
+
+  // Gebiete (Reihenfolge wie in der Vorlage: Grenzgebiet unten, Kerngebiete oben)
+  const cls = { fr: 'sm-frontier', ua: 'sm-ua', upp: 'sm-upp', twe: 'sm-twe', ind: 'sm-indep' };
+  for (const k of ['fr', 'ua', 'upp', 'twe', 'ind']) {
+    (STARMAP.regions[k] || []).forEach((p) => el('path', { d: pathOf(p), class: cls[k] }, world));
+  }
+
+  // Raster (1 Feld = 1 Parsec)
+  const grid = el('g', { class: 'sm-grid' }, world);
+  const gd = STARMAP.grid;
+  for (let i = 0; i < gd.nx; i++) { const x = (gd.x0 + i * gd.dx) * S; el('line', { x1: x, y1: fy0 * S, x2: x, y2: fy1 * S }, grid); }
+  for (let j = 0; j < gd.ny; j++) { const y = (gd.y0 + j * gd.dy) * S; el('line', { x1: fx0 * S, y1: y, x2: fx1 * S, y2: y }, grid); }
+  el('rect', { x: fx0 * S, y: fy0 * S, width: (fx1 - fx0) * S, height: (fy1 - fy0) * S, class: 'sm-frame' }, world);
+
+  // Achsen mit Parsec-Zählung ab Sol
+  const ax = 678 * S;
+  const ay = 446 * S;
+  el('line', { x1: fx0 * S, y1: ay, x2: fx1 * S, y2: ay, class: 'sm-axis' }, world);
+  el('line', { x1: ax, y1: fy0 * S, x2: ax, y2: fy1 * S, class: 'sm-axis' }, world);
+  for (let i = 0; i < gd.nx; i++) {
+    const x = (gd.x0 + i * gd.dx) * S;
+    const n = Math.round(Math.abs(x - ax) / (gd.dx * S));
+    if (n > 0) txt(world, x, ay + 22, String(n), 'sm-num', { 'text-anchor': 'middle' });
+  }
+  for (let j = 0; j < gd.ny; j++) {
+    const y = (gd.y0 + j * gd.dy) * S;
+    const n = Math.round(Math.abs(y - ay) / (gd.dy * S));
+    if (n > 0) txt(world, ax + 8, y + 18, String(n), 'sm-num');
+  }
+  txt(world, (fx0 + 14) * S, ay - 12, '◂ RIMWARD', 'sm-dir');
+  txt(world, (fx1 - 14) * S, ay - 12, 'COREWARD ▸', 'sm-dir', { 'text-anchor': 'end' });
+  txt(world, ax + 14, (fy0 + 16) * S, '▴ SPINWARD', 'sm-dir');
+  txt(world, ax - 14, (fy1 - 10) * S, 'TRAILWARD ▾', 'sm-dir', { 'text-anchor': 'end' });
+
+  // Ringe
+  const labels = { rim: 'OUTER RIM TERRITORIES', veil: 'OUTER VEIL', core: 'CORE SYSTEMS' };
+  STARMAP.rings.forEach((ring, i) => {
+    const c = P(...ring.c);
+    ring.r.forEach((rad) => el('path', { d: circle(c, rad * S), class: 'sm-ring' }, world));
+    const rr = Math.max(...ring.r) * S + 10;
+    const a1 = (-128 * Math.PI) / 180;
+    const a2 = (-52 * Math.PI) / 180;
+    const id = `sm-arc-${i}`;
+    el('path', { id, d: `M${c.x + rr * Math.cos(a1)} ${c.y + rr * Math.sin(a1)} A${rr} ${rr} 0 0 1 ${c.x + rr * Math.cos(a2)} ${c.y + rr * Math.sin(a2)}`, fill: 'none' }, defs);
+    const t = el('text', { class: 'sm-arc' }, world);
+    const tp = el('textPath', { href: `#${id}`, startOffset: '50%', 'text-anchor': 'middle' }, t);
+    tp.textContent = labels[ring.label] || '';
+  });
+
+  // Hintergrundsterne
+  STARMAP.decor.forEach(([x, y]) => el('path', { d: sparkle(x * S, y * S, 4 + r() * 3), class: 'sm-star' }, world));
+  for (let i = 0; i < 260; i++) {
+    const x = (fx0 + r() * (fx1 - fx0)) * S;
+    const y = (fy0 + r() * (fy1 - fy0)) * S;
+    el('circle', { cx: x.toFixed(1), cy: y.toFixed(1), r: (0.6 + r() * 1).toFixed(1), class: 'sm-star dim' }, world);
+  }
+
+  // Sektorfelder
+  const nodes = {};
+  STARMAP.sectors.forEach((sec, i) => {
+    const name = sectorName(cfg, sec);
+    const w = Math.max(sec.w, name.length * 4.2 + 8) * S;
+    const h = 11 * S;
+    const x = sec.x * S - w / 2;
+    const y = sec.y * S - h / 2;
+    const g = el('g', { class: `sm-sector${sec.target ? ' hot' : ''}`, 'data-sec': sec.id }, world);
+    el('rect', { x, y, width: w, height: h, class: 'sm-box' }, g);
+    txt(g, sec.x * S, sec.y * S + 5, name || (opts.editor ? `S${i + 1}` : 'NO DATA'), 'sm-box-t', { 'text-anchor': 'middle' });
+    nodes[sec.id] = g;
+  });
+
+  // Sol
+  el('circle', { cx: SOL.x, cy: SOL.y, r: 14, class: 'sm-ring' }, world);
+  el('circle', { cx: SOL.x, cy: SOL.y, r: 6, class: 'm-target' }, world);
+  txt(world, SOL.x - 22, SOL.y + 6, 'SOL', 'sm-sol', { 'text-anchor': 'end' });
+
+  // Sternensysteme (benennbar)
+  STARMAP.systems.forEach((sys) => {
+    const p = P(sys.x, sys.y);
+    const isT = sys.id === STARMAP.targetId;
+    const g = el('g', { class: `sm-sys${isT ? ' target' : ''}`, 'data-sys': sys.id }, world);
+    el('path', { d: sparkle(p.x, p.y, isT ? 10 : 7), class: isT ? 'sm-target' : 'sm-star big' }, g);
+    if (opts.editor) el('circle', { cx: p.x, cy: p.y, r: 13, class: 'sm-hit' }, g);
+    const name = systemName(cfg, sys);
+    const sub = cfg.starmap?.systems?.[sys.id]?.sub || '';
+    if (name && !isT) {
+      txt(g, p.x + 12, p.y - 4, name, 'sm-name');
+      if (sub) txt(g, p.x + 12, p.y + 14, sub, 'sm-sub');
+    }
+    if (opts.editor && !name) txt(g, p.x + 10, p.y - 6, sys.id.slice(1), 'sm-idx');
+    nodes[sys.id] = g;
+  });
+  return nodes;
 }
 
 export function drawStarmap(g, cfg) {
-  const r = rng(282);
-  const defs = el('defs', {}, g);
-  patterns(defs);
   const world = el('g', {}, g);
-
-  // Grenzgebiet (schraffiert)
-  el('path', { d: ringPath(SOL, R_RIM, R_EDGE), class: 'sm-frontier', 'fill-rule': 'evenodd' }, world);
-  el('path', { d: smooth([[640, 520], [690, 498], [750, 505], [775, 530], [740, 560], [680, 562], [645, 548]]), class: 'sm-frontier' }, world);
-  el('path', { d: smooth([[420, 20], [520, -10], [600, 30], [575, 80], [500, 70], [450, 90]]), class: 'sm-frontier' }, world);
-
-  // United Americas (gestreift)
-  el('path', { d: ringPath(SOL, R_CORE, R_RIM), class: 'sm-ua', 'fill-rule': 'evenodd' }, world);
-
-  // UPP (flächig) – großes Gebiet oben links und die Halbinsel entlang des Outer Veil
-  el('path', {
-    d: smooth([
-      [-1300, -900], [560, -900], [560, -20], [470, 55], [410, 110], [330, 140], [250, 150], [212, 190], [222, 255],
-      [258, 320], [296, 388], [322, 448], [342, 497], [360, 540], [376, 580], [398, 612], [404, 640], [382, 650],
-      [358, 626], [338, 588], [318, 540], [300, 470], [150, 455], [-1300, 455],
-    ], false),
-    class: 'sm-upp',
-    'clip-path': 'url(#outside-veil)',
-  }, world);
-
-  // Kernsysteme (Three World Empire) und unabhängige Kolonien (gepunktet)
-  el('path', { d: circlePath(SOL, R_CORE), class: 'sm-twe' }, world);
-  [
-    [[-10, 610], [60, 590], [120, 615], [130, 665], [90, 710], [20, 715], [-30, 680]],
-    [[205, 650], [228, 645], [235, 668], [214, 676]],
-    [[232, 690], [255, 688], [258, 708], [236, 712]],
-    [[240, 790], [280, 780], [295, 810], [265, 835], [238, 820]],
-  ].forEach((pts) => el('path', { d: smooth(pts), class: 'sm-indep' }, world));
-
-  // Raster und Spaltennummern
-  const grid = el('g', { class: 'sm-grid' }, world);
-  for (let x = 26 - 58.3 * 22; x < 1600; x += 58.3) el('line', { x1: x, y1: BOUNDS.y, x2: x, y2: BOUNDS.y + BOUNDS.h }, grid);
-  for (let y = 30 - 58 * 16; y < 1600; y += 58) el('line', { x1: BOUNDS.x, y1: y, x2: BOUNDS.x + BOUNDS.w, y2: y }, grid);
-  for (let n = 1; n <= 14; n++) txt(world, 55 + (n - 2) * 58.3, 610, String(n), 'sm-num', { 'text-anchor': 'middle' });
-
-  // Ringe mit Beschriftung
-  [R_VEIL - 4, R_VEIL + 4, R_RIM - 4, R_RIM + 4].forEach((rad) => el('path', { d: circlePath(SOL, rad), class: 'sm-ring' }, world));
-  const arcs = [['arc-veil', R_VEIL + 12, -118, -40, 'OUTER VEIL'], ['arc-rim', R_RIM + 12, -112, -45, 'OUTER RIM TERRITORIES'], ['arc-core', R_CORE - 20, -160, -105, 'CORE SYSTEMS']];
-  arcs.forEach(([id, rad, a1, a2, label]) => {
-    el('path', { id, d: arcPath(SOL, rad, a1, a2), fill: 'none' }, defs);
-    const t = el('text', { class: 'sm-arc' }, world);
-    const tp = el('textPath', { href: `#${id}`, startOffset: '18%' }, t);
-    tp.textContent = label;
-  });
-
-  // Sektorfelder: nur Borodino ist freigegeben
-  [[40, 480, 150], [296, 332, 170], [575, 650, 160], [440, 732, 140], [228, 712, 120], [40, 620, 140]].forEach(([x, y, w]) => {
-    el('rect', { x, y, width: w, height: 20, class: 'sm-box' }, world);
-    txt(world, x + w / 2, y + 14, 'NO DATA', 'sm-box-t', { 'text-anchor': 'middle' });
-  });
-  el('rect', { x: 400, y: 562, width: 150, height: 22, class: 'sm-box hot' }, world);
-  txt(world, 475, 577, cfg.sector, 'sm-box-t hot', { 'text-anchor': 'middle' });
-
-  // Weyland-Yutani-Emblem, wie auf der Vorlage
-  const wy = el('g', { transform: 'translate(168 790) scale(.55)', class: 'sm-wy' }, world);
-  el('path', { d: 'M0 1 H22 L38 27 L50 11 H70 L82 27 L98 1 H120 L92 39 H74 L60 19 L46 39 H28 Z' }, wy);
-  el('path', { d: 'M50 1 H70 L60 8 Z' }, wy);
-
-  // Sterne
-  const T = { x: 352, y: 522 };
-  for (let i = 0; i < 520; i++) {
-    const x = BOUNDS.x + r() * BOUNDS.w;
-    const y = BOUNDS.y + r() * BOUNDS.h;
-    if (Math.hypot(x - T.x, y - T.y) < 22) continue;
-    if (r() < 0.14) el('path', { d: sparkle(x, y, 3 + r() * 4), class: 'sm-star big' }, world);
-    else el('circle', { cx: x.toFixed(1), cy: y.toFixed(1), r: (0.7 + r() * 1.3).toFixed(1), class: 'sm-star' }, world);
-  }
-
-  // Sol
-  el('circle', { cx: SOL.x, cy: SOL.y, r: 18, class: 'sm-ring' }, world);
-  el('circle', { cx: SOL.x, cy: SOL.y, r: 7, class: 'm-target' }, world);
-  txt(world, SOL.x + 26, SOL.y + 8, 'SOL', 'sm-sol');
-
-  // Route Sol → Ziel (wird beim Anflug gezeichnet)
+  drawStarmapLayer(world, cfg);
+  const T = P(...STARMAP.target);
   const route = el('line', { x1: SOL.x, y1: SOL.y, x2: SOL.x, y2: SOL.y, class: 'sm-route' }, world);
-
-  // Zielstern
-  el('path', { d: sparkle(T.x, T.y, 9), class: 'sm-target' }, world);
+  // Ziel vor die Route legen
+  world.appendChild(world.querySelector('.sm-sys.target'));
 
   const homeW = 860;
   const homeH = (homeW * 446) / 1000;
@@ -129,12 +150,12 @@ export function drawStarmap(g, cfg) {
     title: 'STERNENKARTE // GALACTIC POSITION',
     target: T,
     home: { x: T.x - homeW * 0.36, y: T.y - homeH / 2, w: homeW, h: homeH },
-    start: { cx: SOL.x, cy: SOL.y, w: 1900 },
-    via: { x: 330, y: 930 },
+    start: { cx: SOL.x, cy: SOL.y, w: 2100 },
+    via: { x: SOL.x + 120, y: SOL.y + 420 },
     world,
     route,
     lock: cfg.starLock || ['TARGET LOCKED', cfg.star],
-    coord: `${cfg.starmap.distancePc.toFixed(2)} PC`,
+    coord: `${Number(cfg.starmap.distancePc || 0).toFixed(2)} PC`,
     lockTag: 'A',
     lockScale: homeW / 1000,
     next: `SYSTEMKARTE ${cfg.star}`,

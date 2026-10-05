@@ -1,11 +1,11 @@
-import { CONFIG, TOPICS, MENU, PERSONNEL, STATION, DEMO_REPLIES } from './data.js';
+import { CONFIG, TOPICS, MENU, PERSONNEL, STATION, DEMO_REPLIES, COMMLOG, SYSTEMS, SELFDESTRUCT, ACCESS } from './data.js';
 import { matchTopic, normalize } from './matcher.js';
 import { sound } from './sound.js';
 import { runBoot } from './boot.js';
 import { MapView, LEVELS } from './maps.js';
 import { wyLogo } from './logo.js';
 import { loadContent, CONTENT_KEY } from './content.js';
-import { loadLayer } from './layer.js';
+import { loadLayer, STATUS } from './layer.js';
 import { roomName } from './stationplan.js';
 
 loadContent();
@@ -23,10 +23,33 @@ const state = {
   typing: null,
   map: null,
   chat: null,
+  user: null, // { name, level: 'green'|'orange'|'red', mainframe }
+  login: null,
+  logIndex: 0,
+  sysIndex: 0,
+  sd: null, // Selbstzerstörungs-Dialog
+  destruct: null, // laufender Countdown
 };
 
+// ---------- Zugangsstufen ----------
+
+const RANK = { green: 0, orange: 1, red: 2, mainframe: 3 };
+const userRank = () => (!state.user ? -1 : state.user.mainframe ? 3 : RANK[state.user.level] ?? 0);
+const canSee = (access) => (RANK[access] ?? 1) <= userRank();
+const levelName = () => (state.user ? (state.user.mainframe ? ACCESS.mainframe : ACCESS[state.user.level]) : '–');
+const levelClass = () => (state.user ? `lvl-${state.user.mainframe ? 'red' : state.user.level}` : '');
+const KEYS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+
+// Sichtbare Menüpunkte mit automatisch vergebenen Tasten
+function visibleMenu() {
+  return MENU.filter((m) => {
+    const t = topicById(m.topic);
+    return t && canSee(t.access);
+  }).map((m, i) => ({ ...m, key: KEYS[i] || '' }));
+}
+
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
-const CRIT = /(?<![A-ZÄÖÜ])(KRITISCH|OFFLINE|AUSGEFALLEN|NICHT ERREICHBAR|FEHLER|UNBEKANNT)(?![A-ZÄÖÜ])/g;
+const CRIT = /(?<![A-ZÄÖÜ])(KRITISCH|SCHADEN|ABGERIEGELT|OFFLINE|AUSGEFALLEN|NICHT ERREICHBAR|FEHLER|UNBEKANNT)(?![A-ZÄÖÜ])/g;
 const WARN = /(?<![A-ZÄÖÜ])(WARNUNG|EINGESCHRÄNKT)(?![A-ZÄÖÜ])/g;
 const colorize = (s) => esc(s).replace(CRIT, '<span class="crit">$1</span>').replace(WARN, '<span class="warn">$1</span>');
 const pad = (n, l = 2) => String(n).padStart(l, '0');
@@ -47,7 +70,10 @@ function setTitle(title, right = '') {
 
 function setHint(text) { $('#f-hint').textContent = text; }
 
-function renderCmd() { $('#cmd').textContent = state.buffer; }
+function renderCmd() {
+  const mask = state.view === 'selfdestruct' && /code/.test(state.sd?.step || '');
+  $('#cmd').textContent = mask ? '*'.repeat(state.buffer.length) : state.buffer;
+}
 
 function initChromeText() {
   $('#info-model').textContent = `${CONFIG.computer} ${String(CONFIG.model).replace(/^APOLLO\s*/, '')}`.trim();
@@ -60,14 +86,19 @@ function initChrome() {
   initChromeText();
 
   const t0 = Date.now();
-  let lock = 14024;
   setInterval(() => {
     const s = (Date.now() - t0) / 1000;
     $('#f-clock').textContent = `${pad(Math.floor(s / 3600))}H${pad(Math.floor(s / 60) % 60)}M ${(s % 60).toFixed(4).padStart(7, '0')}`;
-    if (Math.random() < 0.3) lock += Math.floor(Math.random() * 7);
-    $('#f-lock').textContent = `${pad(lock, 8)} ${pad(Math.floor(Math.random() * 100))}`;
   }, 90);
   updateFlags();
+  updateUser();
+}
+
+function updateUser() {
+  $('#f-user').textContent = state.user ? state.user.name : 'NICHT ANGEMELDET';
+  const lv = $('#f-level');
+  lv.textContent = state.user?.mainframe ? 'ROT·MF' : levelName();
+  lv.className = levelClass();
 }
 
 function updateFlags() {
@@ -124,6 +155,7 @@ function leave() {
   state.map = null;
   if (state.chat) state.chat.timers.forEach(clearTimeout);
   state.chat = null;
+  state.sd = null;
 }
 
 function showMenu() {
@@ -131,20 +163,27 @@ function showMenu() {
   state.view = 'menu';
   setTitle('HAUPTMENÜ', '1A ◂');
   setHint('↑↓ WÄHLEN · ⏎ ÖFFNEN · ODER FRAGE EINTIPPEN');
+  const menu = visibleMenu();
+  if (state.menuIndex >= menu.length) state.menuIndex = 0;
   view.innerHTML = `
     <div class="menu">
       <section class="menu-main">
         <p class="greet">${esc(CONFIG.greeting)}</p>
-        <ul class="menu-list">
-          ${MENU.map((m, i) => `<li data-i="${i}"><span class="k">[${m.key}]</span><span>${esc(m.label)}</span></li>`).join('')}
+        <ul class="menu-list${menu.length > 10 ? ' long' : ''}">
+          ${menu.map((m, i) => `<li data-i="${i}" class="${m.topic === 'selbstzerstoerung' ? 'danger' : ''}"><span class="k">[${m.key}]</span><span>${esc(m.label)}</span></li>`).join('')}
         </ul>
       </section>
       <aside class="menu-side">
-        <div class="side-head"><span>DYNAMIC STATUS</span><span>LOCK <i class="sq"></i></span></div>
-        ${radar()}
+        <div class="side-head"><span>DYNAMIC STATUS</span></div>
+        <div class="readouts user">
+          <div class="ro col"><span class="dim">AKTUELLER BENUTZER</span><span>${esc(state.user?.name || '–')}</span></div>
+          <div class="ro col"><span class="dim">ZUGANGSSTUFE</span><span class="${levelClass()}">${esc(levelName())}</span></div>
+        </div>
         <div class="readouts">
           ${CONFIG.readouts.map((r) => `<div class="ro"><span>${esc(r.label)}</span><span class="${r.state}">${esc(r.value)}</span></div>`).join('')}
         </div>
+        ${state.destruct ? '<div class="ro crit sd-mini"><span>SELBSTZERSTÖRUNG</span><span class="sd-clock"></span></div>' : ''}
+        <div class="side-foot dim">ABMELDEN: „ABMELDEN“ + ⏎</div>
       </aside>
     </div>`;
   view.querySelectorAll('.menu-list li').forEach((li) => {
@@ -158,34 +197,21 @@ function markMenu() {
   view.querySelectorAll('.menu-list li').forEach((li, i) => li.classList.toggle('sel', i === state.menuIndex));
 }
 
-function radar() {
-  const dots = [];
-  for (let x = 6; x < 200; x += 12) {
-    for (let y = 6; y < 200; y += 12) {
-      if (Math.hypot(x - 100, y - 100) > 88) dots.push(`<circle cx="${x}" cy="${y}" r="1"/>`);
-    }
-  }
-  return `<svg class="radar" viewBox="0 0 200 200">
-    <g class="r-dots">${dots.join('')}</g>
-    <circle cx="100" cy="100" r="80" class="r-ring"/>
-    <circle cx="100" cy="100" r="50" class="r-ring dim"/>
-    <circle cx="100" cy="100" r="18" class="r-ring dim"/>
-    <line x1="100" y1="14" x2="100" y2="186" class="r-ax"/><line x1="14" y1="100" x2="186" y2="100" class="r-ax"/>
-    <g class="sweep"><path d="M100 100 L100 20 A80 80 0 0 1 156.6 43.4 Z" class="r-wedge"/><line x1="100" y1="100" x2="100" y2="20" class="r-line"/></g>
-    <circle cx="138" cy="66" r="5" class="r-ring blip"/><circle cx="72" cy="128" r="4" class="r-blip b2"/><circle cx="124" cy="140" r="3.5" class="r-blip"/>
-    <path d="M20 92 l8 8 l-8 8 M180 92 l-8 8 l8 8" class="r-ch"/>
-  </svg>`;
-}
-
 function openMenu(i) {
+  const m = visibleMenu()[i];
+  if (!m) return;
   state.menuIndex = i;
   sound.confirm();
-  openTopic(topicById(MENU[i].topic));
+  openTopic(topicById(m.topic));
 }
 
 function openTopic(topic) {
   if (!topic) return showMenu();
+  if (!canSee(topic.access)) return showDenied(topic);
   if (topic.view === 'report') showReport(topic);
+  else if (topic.view === 'commlog') showCommlog();
+  else if (topic.view === 'systems') showSystems();
+  else if (topic.view === 'selfdestruct') showSelfDestruct();
   else if (topic.view === 'map') showMap(topic);
   else if (topic.view === 'interkom') showInterkom();
   else if (topic.view === 'help') showHelp();
@@ -238,7 +264,6 @@ function showDamage(topic) {
   const layer = loadLayer(lv.id, lv.layer);
   const level = lv.plan;
   const roomById = (id) => level.rooms.find((r) => r.id === id);
-  const label = { '': 'NOMINAL', warn: 'WARNUNG', damage: 'KRITISCH', offline: 'OFFLINE', sealed: 'ABGERIEGELT' };
   const rows = [];
   const covered = new Set();
   for (const c of dmg.cases || []) {
@@ -259,7 +284,7 @@ function showDamage(topic) {
   rows.filter((r) => ['damage', 'offline', 'sealed'].includes(r.status) && r.text)
     .forEach((r) => blocks.push({ type: 'alert', text: `${r.name}: ${r.text}` }));
   if (rows.length) {
-    blocks.push({ type: 'table', head: ['BEREICH', 'STATUS', 'MELDUNG'], rows: rows.map((r) => [r.name, label[r.status] || 'NOMINAL', r.text || '–']) });
+    blocks.push({ type: 'table', head: ['BEREICH', 'STATUS', 'MELDUNG'], rows: rows.map((r) => [r.name, STATUS[r.status] || STATUS[''], r.text || '–']) });
   }
   if (Number.isFinite(hull) && dmg.hullLabel) blocks.push({ type: 'meter', label: dmg.hullLabel, value: hull, state: hull < 50 ? 'crit' : hull < 90 ? 'warn' : '' });
   if (dmg.recommendation) blocks.push({ type: 'text', text: `EMPFEHLUNG: ${dmg.recommendation}` });
@@ -271,13 +296,14 @@ function showHelp() {
   state.view = 'help';
   setTitle('HILFE', '0H ◂');
   setHint('ESC MENÜ');
-  const examples = TOPICS.filter((t) => t.example);
+  const examples = TOPICS.filter((t) => t.example && canSee(t.access));
   view.innerHTML = `<div class="report help">
       <p>STELLEN SIE IHRE FRAGE IN NORMALER SPRACHE ODER WÄHLEN SIE EINEN MENÜPUNKT PER BUCHSTABE + ENTER.</p>
       <p class="dim">VERFÜGBARE INFORMATIONSKATEGORIEN:</p>
       <div class="help-grid">
         ${examples.map((t) => `<div class="help-item"><span class="hl">${esc(t.title)}</span><span class="dim">z.B. „${esc(t.example)}“</span></div>`).join('')}
       </div>
+      <p class="dim">ANGEMELDET: ${esc(state.user?.name || '–')} // ZUGANGSSTUFE ${esc(levelName())} · „ABMELDEN“ BEENDET DIE SITZUNG.</p>
       <p class="dim">TASTEN: ↑↓ AUSWAHL · ⏎ BESTÄTIGEN · ESC ZURÜCK · F9 TON AN/AUS · F10 RÖHRENEFFEKT · F11 VOLLBILD</p>
     </div>`;
   typewrite(view.firstElementChild, 600);
@@ -293,6 +319,22 @@ function showUnknown(raw) {
       <p class="dim">&gt; ANFRAGE: „${esc(raw.toUpperCase())}“</p>
       <p class="warn">ANFRAGE KONNTE KEINER DATENBANK ZUGEORDNET WERDEN.</p>
       <p>BITTE FORMULIEREN SIE IHRE ANFRAGE NEU ODER GEBEN SIE <span class="hl">HILFE</span> EIN.</p>
+    </div>`;
+  typewrite(view.firstElementChild);
+}
+
+function showDenied(topic) {
+  leave();
+  state.view = 'denied';
+  setTitle('ZUGRIFF VERWEIGERT', 'SEC ◂');
+  setHint('ESC MENÜ · ODER NEUE FRAGE');
+  sound.error();
+  const need = topic.access === 'mainframe' ? 'NUR AM MAINFRAME (COMPUTERRAUM) VERFÜGBAR.' : `ZUGANGSSTUFE ${ACCESS[topic.access] || ''} ERFORDERLICH.`;
+  view.innerHTML = `<div class="report">
+      <p class="dim">&gt; ${esc(topic.title)}</p>
+      <p class="crit">ZUGRIFF VERWEIGERT.</p>
+      <p>${esc(need)}</p>
+      <p class="dim">IHRE ZUGANGSSTUFE: <span class="${levelClass()}">${esc(levelName())}</span></p>
     </div>`;
   typewrite(view.firstElementChild);
 }
@@ -432,6 +474,346 @@ function sendChat(text) {
   }, 700));
 }
 
+// ---------- Anmeldung ----------
+
+const LOGIN_ID = [['guest', 'GASTZUGANG'], ['mainframe', 'DIREKTZUGANG MAINFRAME (COMPUTERRAUM)']];
+const LOGIN_LEVEL = [['green', 'GRÜN'], ['orange', 'ORANGE'], ['red', 'ROT'], ['mainframe', 'DIREKTZUGANG MAINFRAME (COMPUTERRAUM)']];
+
+function loginOptions() { return state.login?.step === 'level' ? LOGIN_LEVEL : LOGIN_ID; }
+
+function showLogin(step = 'id', name = '') {
+  leave();
+  state.view = 'login';
+  state.login = { step, name, index: 0 };
+  setTitle('IDENTIFIKATION', 'ID ◂');
+  const opts = loginOptions();
+  const cls = { green: 'lvl-green', orange: 'lvl-orange', red: 'lvl-red', mainframe: 'lvl-red' };
+  if (step === 'id') setHint('NAME EINTIPPEN + ⏎ · ODER ↑↓ / BUCHSTABE WÄHLEN');
+  else setHint('↑↓ / BUCHSTABE WÄHLEN · ⏎ BESTÄTIGEN · ESC ZURÜCK');
+  view.innerHTML = `<div class="login">
+      <div class="login-box">
+        <div class="login-head"><span>${esc(CONFIG.company)} // ZUGANGSKONTROLLE</span><span>${esc(CONFIG.stationCode)} ${esc(CONFIG.terminalId)}</span></div>
+        <div class="login-body">
+        ${step === 'id' ? `
+          <p>${esc(CONFIG.computer)} // BITTE IDENTIFIZIEREN SIE SICH.</p>
+          <p class="dim">NAME EINTIPPEN UND MIT ⏎ BESTÄTIGEN – ODER:</p>` : `
+          <p>BENUTZER: <span class="hl">${esc(name)}</span></p>
+          <p class="dim">ZUGANGSSTUFE WÄHLEN:</p>`}
+          <ul class="menu-list login-list">
+            ${opts.map(([k, t], i) => `<li data-i="${i}"><span class="k">[${KEYS[i]}]</span><span class="${step === 'level' ? cls[k] : ''}">${esc(t)}</span></li>`).join('')}
+          </ul>
+        </div>
+      </div>
+    </div>`;
+  view.querySelectorAll('.login-list li').forEach((li) => {
+    li.addEventListener('mouseenter', () => { state.login.index = +li.dataset.i; markLogin(); });
+    li.addEventListener('click', () => pickLogin(+li.dataset.i));
+  });
+  markLogin();
+  typewrite($('.login-body', view), 500);
+}
+
+function markLogin() {
+  view.querySelectorAll('.login-list li').forEach((li, i) => li.classList.toggle('sel', i === state.login.index));
+}
+
+function pickLogin(i) {
+  const opt = loginOptions()[i];
+  if (!opt) return;
+  const [k] = opt;
+  const { step, name } = state.login;
+  if (step === 'id' && k === 'guest') return grant({ name: 'GAST', level: 'green', mainframe: false });
+  if (k === 'mainframe') return grant({ name: step === 'level' ? name : 'MAINFRAME-KONSOLE', level: 'red', mainframe: true });
+  if (step === 'level') grant({ name, level: k, mainframe: false });
+}
+
+async function grant(user) {
+  state.user = user;
+  state.menuIndex = 0;
+  updateUser();
+  sound.confirm();
+  leave();
+  state.view = 'granted';
+  state.busy = true;
+  view.innerHTML = `<div class="login"><div class="login-box"><div class="login-body">
+      <p>IDENTITÄT REGISTRIERT: <span class="hl">${esc(user.name)}</span></p>
+      <p>ZUGANGSSTUFE: <span class="${levelClass()}">${esc(levelName())}</span></p>
+      <p class="mint">ZUGANG GEWÄHRT.</p>
+    </div></div></div>`;
+  await typewrite($('.login-body', view), 400);
+  await later(700);
+  state.busy = false;
+  showMenu();
+}
+
+function logout() {
+  sound.beep();
+  state.user = null;
+  updateUser();
+  showLogin();
+}
+
+// ---------- KOMMLOG ----------
+
+const visibleLog = () => COMMLOG.map((m, i) => ({ m, i })).filter(({ m }) => canSee(m.access || 'orange'));
+const sentLabel = (m) => (m.sent === false ? '<span class="crit">NICHT VERSENDET</span>' : '<span class="mint">VERSENDET</span>');
+const accessLabel = (a) => `<span class="lvl-${a === 'mainframe' ? 'red' : a || 'orange'}">${esc(ACCESS[a] || ACCESS.orange)}</span>`;
+
+function showCommlog() {
+  leave();
+  state.view = 'commlog';
+  setTitle('KOMMLOG // STATIONSKOMMUNIKATION', '4K ◂');
+  setHint('↑↓ WÄHLEN · ⏎ ÖFFNEN · ESC MENÜ');
+  const list = visibleLog();
+  if (state.logIndex >= list.length) state.logIndex = 0;
+  view.innerHTML = `<div class="log">
+      <div class="report-head"><span>${list.length} EINTRÄGE // FREIGABE ${esc(levelName())}</span><span>${stamp()}</span></div>
+      ${list.length ? `<table class="tbl log-tbl">
+        <colgroup><col style="width:125px"><col style="width:80px"><col style="width:200px"><col style="width:200px"><col><col style="width:105px"><col style="width:180px"></colgroup>
+        <thead><tr><th>DATUM</th><th>ZEIT</th><th>SENDER</th><th>EMPFÄNGER</th><th>BETREFF</th><th>ZUGANG</th><th>STATUS</th></tr></thead>
+        <tbody>${list.map(({ m }, i) => `<tr data-i="${i}"><td>${esc(m.date)}</td><td>${esc(m.time)}</td><td>${esc(m.from)}</td><td>${esc(m.to)}</td><td>${esc(m.subject)}</td><td>${accessLabel(m.access)}</td><td>${sentLabel(m)}</td></tr>`).join('')}</tbody>
+      </table>` : '<p class="dim">KEINE EINTRÄGE FÜR IHRE ZUGANGSSTUFE.</p>'}
+    </div>`;
+  view.querySelectorAll('.log-tbl tbody tr').forEach((tr) => {
+    tr.addEventListener('mouseenter', () => { state.logIndex = +tr.dataset.i; markLog(); });
+    tr.addEventListener('click', () => openMessage(+tr.dataset.i));
+  });
+  markLog();
+}
+
+function markLog() {
+  view.querySelectorAll('.log-tbl tbody tr').forEach((tr, i) => tr.classList.toggle('sel', i === state.logIndex));
+  view.querySelector('.log-tbl tr.sel')?.scrollIntoView({ block: 'nearest' });
+}
+
+function openMessage(i) {
+  const entry = visibleLog()[i];
+  if (!entry) return;
+  const { m } = entry;
+  state.logIndex = i;
+  sound.confirm();
+  leave();
+  state.view = 'message';
+  setTitle('KOMMLOG // NACHRICHT', '4M ◂');
+  setHint('⏎ ÜBERSPRINGEN · ↑↓ BLÄTTERN · ESC LISTE');
+  const person = PERSONNEL.find((p) => p.name && normalize(p.name) === normalize(m.from || ''));
+  const image = m.image || person?.image || '';
+  view.innerHTML = `<div class="msg-view">
+      <div class="portrait">${portrait({ image })}</div>
+      <div class="msg-body report">
+        <div class="pdata">
+          <div class="prow"><span class="dim">VON</span><span>${esc(m.from)}</span></div>
+          <div class="prow"><span class="dim">AN</span><span>${esc(m.to)}</span></div>
+          <div class="prow"><span class="dim">DATUM</span><span>${esc(m.date)} // ${esc(m.time)}</span></div>
+          <div class="prow"><span class="dim">ZUGANG</span>${accessLabel(m.access)}</div>
+          <div class="prow"><span class="dim">STATUS</span>${sentLabel(m)}</div>
+        </div>
+        <p class="msg-subj">BETREFF: ${esc(m.subject)}</p>
+        <div class="msg-text">${String(m.text || '').split('\n').map((l) => `<p>${colorize(l)}</p>`).join('')}</div>
+      </div>
+    </div>`;
+  typewrite($('.msg-text', view), 260);
+}
+
+// ---------- ZUGRIFF STATIONSSYSTEME ----------
+
+const SYS_COLS = 4;
+
+function showSystems() {
+  leave();
+  state.view = 'systems';
+  setTitle('ZUGRIFF STATIONSSYSTEME', '5S ◂');
+  setHint('PFEILTASTEN WÄHLEN · ⏎ AUSWÄHLEN · ESC MENÜ');
+  if (state.sysIndex >= SYSTEMS.length) state.sysIndex = 0;
+  view.innerHTML = `<div class="sys">
+      <div class="report-head"><span>STATIONSSYSTEME // FERNZUGRIFF</span><span>BENUTZER ${esc(state.user?.name || '–')}</span></div>
+      <div class="sys-grid">${SYSTEMS.map((n, i) => `<button class="sys-btn" data-i="${i}"><span class="sys-no">${pad(i + 1)}</span><span>${esc(n)}</span></button>`).join('')}</div>
+      <p class="sys-msg dim">SYSTEM WÄHLEN.</p>
+    </div>`;
+  view.querySelectorAll('.sys-btn').forEach((b) => {
+    b.addEventListener('mouseenter', () => { state.sysIndex = +b.dataset.i; markSys(); });
+    b.addEventListener('click', () => { state.sysIndex = +b.dataset.i; markSys(); activateSystem(); });
+  });
+  markSys();
+}
+
+function markSys() {
+  view.querySelectorAll('.sys-btn').forEach((b, i) => b.classList.toggle('sel', i === state.sysIndex));
+}
+
+function moveSys(dx, dy) {
+  const n = SYSTEMS.length;
+  if (!n) return;
+  let i = state.sysIndex + dx + dy * SYS_COLS;
+  if (i < 0) i = (i + n) % n;
+  if (i >= n) i %= n;
+  state.sysIndex = i;
+  markSys();
+  sound.click();
+}
+
+function activateSystem() {
+  const name = SYSTEMS[state.sysIndex];
+  if (!name) return;
+  sound.error();
+  const msg = $('.sys-msg', view);
+  msg.className = 'sys-msg';
+  msg.innerHTML = `&gt; ${esc(name)}: <span class="warn">FERNSTEUERUNG DERZEIT NICHT VERFÜGBAR.</span>`;
+  typewrite(msg, 300);
+}
+
+// ---------- SELBSTZERSTÖRUNG ----------
+
+function showSelfDestruct() {
+  leave();
+  state.view = 'selfdestruct';
+  setTitle('SELBSTZERSTÖRUNG', 'SD ◂');
+  setHint('EINGABE + ⏎ · ESC MENÜ');
+  const sd = { step: 'code', printing: false };
+  state.sd = sd;
+  view.innerHTML = `<div class="sd">
+      <div class="sd-win">
+        <div class="sd-title"><span>MAINFRAME // ${esc(CONFIG.computer)} // REACTOR CONTROL</span><span>${esc(CONFIG.stationCode)}</span></div>
+        <div class="sd-log"></div>
+      </div>
+      <div class="sd-count" hidden><div class="sd-label"></div><div class="sd-clock big"></div></div>
+    </div>`;
+  if (state.destruct) {
+    sd.step = 'running';
+    showCountdown();
+    sdPrint([['SELBSTZERSTÖRUNG LÄUFT.', 'crit'], ['ZUM ABBRECHEN „ABBRUCH“ EINGEBEN.', 'dim']]);
+  } else {
+    sdPrint([...(SELFDESTRUCT.intro || []).map((l) => [l, 'warn']), [SELFDESTRUCT.codePrompt, '']]);
+  }
+}
+
+async function sdPrint(lines) {
+  const sd = state.sd;
+  sd.printing = true;
+  const log = $('.sd-log', view);
+  for (const [text, cls] of lines) {
+    if (state.sd !== sd) return false;
+    const el = document.createElement('div');
+    el.className = `sd-line ${cls || ''}`;
+    el.textContent = text;
+    log.appendChild(el);
+    log.scrollTop = log.scrollHeight;
+    await typewrite(el, 160);
+    await later(140);
+  }
+  if (state.sd !== sd) return false;
+  sd.printing = false;
+  return true;
+}
+
+function sdEcho(text) {
+  const log = $('.sd-log', view);
+  log.insertAdjacentHTML('beforeend', `<div class="sd-line in">&gt; ${esc(text)}</div>`);
+  log.scrollTop = log.scrollHeight;
+}
+
+async function sdInput(raw) {
+  const sd = state.sd;
+  if (!sd || sd.printing || !raw) return;
+  const yes = ['ja', 'j', 'yes', 'y'].includes(normalize(raw));
+  const no = ['nein', 'n', 'no'].includes(normalize(raw));
+  sound.beep();
+  if (sd.step === 'code' || sd.step === 'abort-code') {
+    sdEcho('*'.repeat(Math.max(4, raw.length)));
+    if (sd.step === 'abort-code') {
+      stopDestruct();
+      sd.step = 'aborted';
+      sound.confirm();
+      await sdPrint([[SELFDESTRUCT.codeOk, 'mint'], ['SELBSTZERSTÖRUNG ABGEBROCHEN. REAKTORKERN WIRD STABILISIERT.', 'mint']]);
+      return;
+    }
+    sd.step = 'confirm';
+    sound.confirm();
+    await sdPrint([[SELFDESTRUCT.codeOk, 'mint'], [SELFDESTRUCT.confirm, 'warn']]);
+    return;
+  }
+  if (sd.step === 'confirm') {
+    sdEcho(raw.toUpperCase());
+    if (yes) {
+      sd.step = 'running';
+      sound.error();
+      startDestruct();
+      showCountdown();
+      await sdPrint([...(SELFDESTRUCT.sequence || []).map((l) => [l, 'crit']), ['ZUM ABBRECHEN „ABBRUCH“ EINGEBEN.', 'dim']]);
+    } else if (no) {
+      sd.step = 'aborted';
+      await sdPrint([[SELFDESTRUCT.cancelled, 'dim']]);
+    } else {
+      await sdPrint([['BITTE MIT JA ODER NEIN ANTWORTEN.', 'dim']]);
+    }
+    return;
+  }
+  if (sd.step === 'running') {
+    sdEcho(raw.toUpperCase());
+    if (/^abbr/.test(normalize(raw)) || normalize(raw) === 'abort') {
+      sd.step = 'abort-code';
+      await sdPrint([[SELFDESTRUCT.codePrompt, '']]);
+    } else {
+      await sdPrint([['UNGÜLTIGE EINGABE.', 'dim']]);
+    }
+  }
+}
+
+function showCountdown() {
+  const box = $('.sd-count', view);
+  if (!box) return;
+  box.hidden = false;
+  $('.sd-label', box).textContent = SELFDESTRUCT.countdownLabel || '';
+  tickDestruct();
+}
+
+const fmtLeft = (ms) => {
+  const t = Math.max(0, ms) / 1000;
+  return `${pad(Math.floor(t / 60))}:${pad(Math.floor(t % 60))}.${pad(Math.floor((t * 100) % 100))}`;
+};
+
+function startDestruct() {
+  if (state.destruct) return;
+  const min = Number(SELFDESTRUCT.minutes) > 0 ? Number(SELFDESTRUCT.minutes) : 10;
+  const d = { end: Date.now() + min * 60000, lastAlarm: 0 };
+  d.timer = setInterval(tickDestruct, 50);
+  state.destruct = d;
+  document.body.classList.add('destruct');
+}
+
+function stopDestruct() {
+  if (!state.destruct) return;
+  clearInterval(state.destruct.timer);
+  state.destruct = null;
+  document.body.classList.remove('destruct');
+  $('#f-sd').hidden = true;
+}
+
+function tickDestruct() {
+  const d = state.destruct;
+  if (!d) return;
+  const left = d.end - Date.now();
+  const text = fmtLeft(left);
+  document.querySelectorAll('.sd-clock').forEach((n) => { n.textContent = text; });
+  const f = $('#f-sd');
+  f.hidden = false;
+  f.textContent = `SD T-${text.slice(0, 5)}`;
+  if (Date.now() - d.lastAlarm > 4000) { d.lastAlarm = Date.now(); sound.alarm(); }
+  if (left <= 0) detonate();
+}
+
+function detonate() {
+  clearInterval(state.destruct.timer);
+  state.ready = false;
+  leave();
+  sound.boom();
+  document.body.classList.add('detonated');
+  const over = document.createElement('div');
+  over.className = 'detonation';
+  over.innerHTML = `<div class="det-flash"></div><div class="det-text"><span class="blink">${esc(SELFDESTRUCT.final || 'SIGNAL VERLOREN')}</span></div>`;
+  $('.screen').appendChild(over);
+}
+
 // ---------- Freie Anfrage ----------
 
 async function query(raw) {
@@ -459,7 +841,13 @@ async function query(raw) {
 // ---------- Tastatur ----------
 
 function back() {
+  if (state.view === 'login') {
+    if (state.login?.step === 'level') { sound.beep(); showLogin('id'); }
+    return;
+  }
+  if (state.view === 'granted') return;
   sound.beep();
+  if (state.view === 'message') return showCommlog();
   if (state.view === 'chat') {
     const connected = state.chat?.connected && state.chat.mode === 'call';
     if (connected) chatLine('crit', 'VERBINDUNG GETRENNT.');
@@ -472,9 +860,22 @@ function back() {
 
 function nav(dir) {
   if (state.view === 'menu') {
-    state.menuIndex = (state.menuIndex + dir + MENU.length) % MENU.length;
+    const n = visibleMenu().length || 1;
+    state.menuIndex = (state.menuIndex + dir + n) % n;
     markMenu();
     sound.click();
+  } else if (state.view === 'login') {
+    const n = loginOptions().length;
+    state.login.index = (state.login.index + dir + n) % n;
+    markLogin();
+    sound.click();
+  } else if (state.view === 'commlog') {
+    const n = visibleLog().length || 1;
+    state.logIndex = (state.logIndex + dir + n) % n;
+    markLog();
+    sound.click();
+  } else if (state.view === 'systems') {
+    moveSys(0, dir);
   } else if (state.view === 'interkom') {
     state.personIndex = (state.personIndex + dir + PERSONNEL.length) % PERSONNEL.length;
     renderProfile();
@@ -483,7 +884,7 @@ function nav(dir) {
     if (dir < 0) state.map.ascend();
     else state.map.descend();
   } else {
-    const scroller = $('.report', view) || $('.chat-log', view);
+    const scroller = $('.report', view) || $('.chat-log', view) || $('.sd-log', view);
     if (scroller) scroller.scrollTop += dir * 80;
   }
 }
@@ -497,8 +898,27 @@ function submit() {
     if (raw) sendChat(raw);
     return;
   }
+  if (state.view === 'login') {
+    const lower1 = raw.toLowerCase();
+    const opts = loginOptions();
+    if (!raw) return pickLogin(state.login.index);
+    if (lower1.length === 1 && KEYS.slice(0, opts.length).toLowerCase().includes(lower1)) return pickLogin(KEYS.toLowerCase().indexOf(lower1));
+    if (state.login.step === 'id') {
+      sound.confirm();
+      return showLogin('level', raw.toUpperCase().slice(0, 32));
+    }
+    sound.error();
+    return;
+  }
+  if (state.view === 'selfdestruct') {
+    sdInput(raw);
+    return;
+  }
+  if (['abmelden', 'logout', 'abmeldung', 'log out'].includes(normalize(raw))) return logout();
   if (!raw) {
     if (state.view === 'menu') openMenu(state.menuIndex);
+    else if (state.view === 'commlog') openMessage(state.logIndex);
+    else if (state.view === 'systems') activateSystem();
     else if (state.view === 'interkom') startChat('call');
     else if (state.view === 'map') state.map.descend();
     return;
@@ -523,7 +943,7 @@ function submit() {
     }
   }
   if (/^[a-z]$/.test(lower)) {
-    const i = MENU.findIndex((m) => m.key.toLowerCase() === lower);
+    const i = visibleMenu().findIndex((m) => m.key.toLowerCase() === lower);
     if (i >= 0) return openMenu(i);
   }
   if (['menu', 'menue', 'hauptmenue', 'zurueck', 'back', 'exit'].includes(normalize(raw))) return showMenu();
@@ -570,6 +990,11 @@ function onKey(e) {
         state.map.selectRoom(e.key === 'ArrowLeft' ? -1 : 1);
         return;
       }
+      if (state.view === 'systems') {
+        e.preventDefault();
+        moveSys(e.key === 'ArrowLeft' ? -1 : 1, 0);
+        return;
+      }
       break;
     case 'Enter': e.preventDefault(); submit(); return;
     case 'Backspace':
@@ -596,7 +1021,10 @@ addEventListener('storage', (e) => {
   if (e.key === CONTENT_KEY) {
     loadContent();
     initChromeText();
+    updateUser();
     if (state.view === 'menu') showMenu();
+    else if (state.view === 'commlog') showCommlog();
+    else if (state.view === 'systems') showSystems();
   }
 });
 
@@ -609,7 +1037,7 @@ async function main() {
   const app = $('#app');
   app.hidden = false;
   app.classList.add('appear');
-  showMenu();
+  showLogin();
   state.ready = true;
 }
 

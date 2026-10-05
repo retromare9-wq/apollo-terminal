@@ -1,6 +1,8 @@
 // Inhalts-Editor: alle Texte des Terminals (Reiter in der Fußleiste des Editors).
 import { currentContent, saveContent, defaultContent, CONTENT_KEY, loadContent } from './content.js';
 import { STATUS } from './layer.js';
+import { drawStarmapLayer, S as SM_S } from './starmap.js';
+import { STARMAP } from './starmap-data.js';
 
 const esc = (t) => String(t ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
@@ -13,7 +15,14 @@ export const CONTENT_TABS = [
   ['reports', 'BERICHTE'],
   ['menu', 'MENÜ'],
   ['people', 'PERSONAL'],
+  ['commlog', 'KOMMLOG'],
+  ['systems', 'STATIONSSYSTEME'],
+  ['selfdestruct', 'SELBSTZERSTÖRUNG'],
 ];
+
+const ACCESS_OPTS = [['green', 'GRÜN'], ['orange', 'ORANGE'], ['red', 'ROT'], ['mainframe', 'NUR MAINFRAME']];
+const MSG_ACCESS = ACCESS_OPTS.slice(0, 3);
+const SENT_OPTS = [['true', 'VERSENDET'], ['false', 'NICHT VERSENDET']];
 
 const STATES = [['', 'NORMAL'], ['warn', 'WARNUNG'], ['crit', 'KRITISCH']];
 const BLOCK_TYPES = [['text', 'TEXT'], ['alert', 'WARNMELDUNG'], ['table', 'TABELLE'], ['meter', 'BALKENANZEIGE']];
@@ -26,7 +35,7 @@ function getPath(obj, path) {
 function setPath(obj, path, value) {
   const keys = path.split('.');
   const last = keys.pop();
-  const target = keys.reduce((o, k) => o[k], obj);
+  const target = keys.reduce((o, k) => { if (o[k] == null) o[k] = {}; return o[k]; }, obj);
   target[last] = value;
 }
 
@@ -37,17 +46,24 @@ const CONV = {
   lines: { get: (v) => (v || []).join('\n'), set: (v) => v.split('\n') },
   rows: { get: (v) => (v || []).map((r) => r.join(' | ')).join('\n'), set: (v) => v.split('\n').filter((l) => l.trim()).map((l) => l.split('|').map((x) => x.trim())) },
   bool: { get: (v) => !!v, set: (v) => v },
+  boolsel: { get: (v) => String(v !== false), set: (v) => v === 'true' },
 };
 
 // ---------- Bausteine ----------
 
 const input = (label, path, conv = 'text', extra = '') => `<label class="ed-field">${label}<input type="text" data-path="${path}" data-conv="${conv}" ${extra}></label>`;
 const area = (label, path, conv = 'text', rows = 3, hint = '') => `<label class="ed-field">${label}${hint ? ` <span class="dim">${hint}</span>` : ''}<textarea rows="${rows}" data-path="${path}" data-conv="${conv}"></textarea></label>`;
-const select = (label, path, options) => `<label class="ed-field">${label}<select data-path="${path}" data-conv="text">${options.map(([v, t]) => `<option value="${esc(v)}">${esc(t)}</option>`).join('')}</select></label>`;
+const select = (label, path, options, conv = 'text') => `<label class="ed-field">${label}<select data-path="${path}" data-conv="${conv}">${options.map(([v, t]) => `<option value="${esc(v)}">${esc(t)}</option>`).join('')}</select></label>`;
 const head = (t) => `<div class="ed-head">${t}</div>`;
 const note = (t) => `<p class="ed-note">${t}</p>`;
 const del = (path) => `<button class="danger ed-x" data-del="${path}" title="Entfernen">✕</button>`;
 const add = (path, tpl, text = '+ HINZUFÜGEN') => `<button data-add="${path}" data-tpl='${esc(JSON.stringify(tpl))}'>${text}</button>`;
+
+const imageRow = (path, img) => `<div class="ed-crow ed-imgrow">
+  <div class="ed-thumb">${img ? `<img src="${esc(img)}" alt="">` : '<span class="dim">KEIN BILD</span>'}</div>
+  <button data-upload="${path}">BILD HOCHLADEN …</button>
+  ${img ? `<button class="danger" data-noimg="${path}">BILD ENTFERNEN</button>` : ''}
+</div>`;
 
 // Bild auf höchstens 320 px verkleinern und als JPEG-Daten speichern (passt in den Browser-Speicher)
 function shrinkImage(file, max = 320) {
@@ -121,6 +137,24 @@ export function createContentEditor(root, { level, getLayer, setRoomStatus, toas
       </div>`,
 
     stars: () => `
+      <section class="ed-smwrap">
+        ${head('SYSTEME & SEKTOREN BENENNEN')}
+        ${note('Stern oder Sektorfeld in der Karte anklicken (Mausrad = Zoom, ziehen = bewegen) oder direkt in der Liste eintragen. Leere Sektoren zeigen „NO DATA“, unbenannte Sterne bleiben ohne Beschriftung.')}
+        <div class="ed-smgrid">
+          <div class="ed-smmap"><svg id="sm-prev" xmlns="http://www.w3.org/2000/svg"></svg></div>
+          <div class="ed-smlist">
+            <div class="ed-head">SEKTOREN</div>
+            ${STARMAP.sectors.map((sec, i) => `<div class="ed-crow ed-smrow" data-smrow="${sec.id}">
+              <span class="ed-smno">${sec.target ? '★' : `S${i + 1}`}</span>
+              ${input('', `config.starmap.sectors.${sec.id}`, 'text', `placeholder="${sec.target ? esc(c.config.sector) : 'NO DATA'}" data-smredraw`)}</div>`).join('')}
+            <div class="ed-head">STERNENSYSTEME</div>
+            ${STARMAP.systems.map((sys) => `<div class="ed-crow ed-smrow" data-smrow="${sys.id}">
+              <span class="ed-smno">${sys.id === STARMAP.targetId ? '★' : sys.id.slice(1)}</span>
+              ${input('', `config.starmap.systems.${sys.id}.name`, 'text', `placeholder="${sys.id === STARMAP.targetId ? esc(c.config.star) : 'NAME'}" data-smredraw`)}
+              ${input('', `config.starmap.systems.${sys.id}.sub`, 'text', 'placeholder="ZUSATZ (Z. B. KOLONIE)" data-smredraw')}</div>`).join('')}
+          </div>
+        </div>
+      </section>
       <div class="ed-cgrid">
         <section>
           ${head('STERNENKARTE')}
@@ -225,18 +259,19 @@ export function createContentEditor(root, { level, getLayer, setRoomStatus, toas
       <div class="ed-cgrid wide-right">
         <section>
           ${head('KATEGORIEN')}
-          <div class="ed-tlist">${list.map(({ t: x, i }) => `<button class="ed-tsel ${i === topicIdx ? 'on' : ''}" data-topic="${i}">${esc(x.title || x.id)} <span class="dim">${{ report: '', damage: '· SCHADEN', map: '· KARTE', interkom: '· INTERKOM', help: '· HILFE' }[x.view] || ''}</span></button>`).join('')}</div>
+          <div class="ed-tlist">${list.map(({ t: x, i }) => `<button class="ed-tsel ${i === topicIdx ? 'on' : ''}" data-topic="${i}">${esc(x.title || x.id)} <span class="dim">${{ report: '', damage: '· SCHADEN', map: '· KARTE', interkom: '· INTERKOM', help: '· HILFE', commlog: '· KOMMLOG', systems: '· SYSTEME', selfdestruct: '· SELBSTZERSTÖRUNG' }[x.view] || ''}</span></button>`).join('')}</div>
           <div class="ed-btns">${add('topics', { id: `custom-${Date.now().toString(36)}`, title: 'NEUER BERICHT', view: 'report', example: '', keywords: [], weak: [], blocks: [{ type: 'text', text: '' }] }, '+ NEUER BERICHT')}</div>
           ${note('Neue Berichte erscheinen über die freie Eingabe (Schlüsselwörter). Ins Hauptmenü kommen sie über den Reiter MENÜ.')}
         </section>
         <section>
           ${head(esc(t.title || t.id))}
           ${input('TITEL', `${base}.title`)}
+          ${select('ZUGANGSSTUFE', `${base}.access`, ACCESS_OPTS)}
           ${input('BEISPIELFRAGE FÜR DIE HILFE', `${base}.example`)}
           ${area('SCHLÜSSELWÖRTER', `${base}.keywords`, 'csv', 3, 'durch Komma getrennt · Wortanfänge reichen')}
           ${area('SCHWACHE HINWEISE', `${base}.weak`, 'csv', 2, 'zählen weniger')}
           ${t.view === 'report' ? `${head('INHALT')}${(t.blocks || []).map((b, i) => blockEditor(`${base}.blocks.${i}`, b, i, t.blocks.length)).join('')}
-            <div class="ed-btns">${add(`${base}.blocks`, { type: 'text', text: '' }, '+ BAUSTEIN')}</div>` : note(t.view === 'damage' ? 'Den Inhalt bearbeitest du im Reiter SCHADENSBERICHT.' : 'Diese Kategorie öffnet eine Ansicht ohne eigenen Text (Karte, Interkom, Hilfe).')}
+            <div class="ed-btns">${add(`${base}.blocks`, { type: 'text', text: '' }, '+ BAUSTEIN')}</div>` : note({ damage: 'Den Inhalt bearbeitest du im Reiter SCHADENSBERICHT.', commlog: 'Die Nachrichten bearbeitest du im Reiter KOMMLOG.', systems: 'Die Schaltflächen bearbeitest du im Reiter STATIONSSYSTEME.', selfdestruct: 'Die Texte bearbeitest du im Reiter SELBSTZERSTÖRUNG.' }[t.view] || 'Diese Kategorie öffnet eine Ansicht ohne eigenen Text (Karte, Interkom, Hilfe).')}
           ${String(t.id).startsWith('custom-') ? `<div class="ed-btns"><button class="danger" data-del="${base}">BERICHT LÖSCHEN</button></div>` : ''}
         </section>
       </div>`;
@@ -245,13 +280,19 @@ export function createContentEditor(root, { level, getLayer, setRoomStatus, toas
     menu: () => `
       <section class="ed-cone">
         ${head('HAUPTMENÜ')}
-        ${(c.menu || []).map((m, i) => `<div class="ed-crow">
-          ${input('TASTE', `menu.${i}.key`, 'text', 'maxlength="1" class="key"')}
+        ${note('Die Tasten A, B, C … vergibt das Terminal automatisch nach den Punkten, die die angemeldete Zugangsstufe sehen darf. Die Zugangsstufe gilt für die Kategorie – auch bei freier Eingabe.')}
+        ${(c.menu || []).map((m, i) => {
+          const ti = c.topics.findIndex((t) => t.id === m.topic);
+          return `<div class="ed-crow">
           ${input('BEZEICHNUNG', `menu.${i}.label`)}
           ${select('ÖFFNET', `menu.${i}.topic`, c.topics.map((t) => [t.id, t.title || t.id]))}
+          ${ti >= 0 ? select('ZUGANG', `topics.${ti}.access`, ACCESS_OPTS) : ''}
           <button data-move="menu.${i}" data-dir="-1" title="Nach oben">↑</button><button data-move="menu.${i}" data-dir="1" title="Nach unten">↓</button>
-          ${del(`menu.${i}`)}</div>`).join('')}
-        <div class="ed-btns">${add('menu', { key: '', label: 'NEU', topic: c.topics[0]?.id || '' })}</div>
+          ${del(`menu.${i}`)}</div>`;
+        }).join('')}
+        <div class="ed-btns">${add('menu', { label: 'NEU', topic: c.topics[0]?.id || '' })}</div>
+        ${head('ZUGANGSSTUFEN')}
+        ${note('<b>GRÜN</b>: Gast oder niedrige Stufe · <b>ORANGE</b>: Personal · <b>ROT</b>: Leitung · <b>NUR MAINFRAME</b>: nur bei Anmeldung direkt am Mainframe im Computerraum (Stufe Rot inklusive).')}
       </section>`,
 
     people: () => `
@@ -266,15 +307,135 @@ export function createContentEditor(root, { level, getLayer, setRoomStatus, toas
             <button data-move="personnel.${i}" data-dir="-1">↑</button><button data-move="personnel.${i}" data-dir="1">↓</button>
             ${del(`personnel.${i}`)}
           </div>
-          <div class="ed-crow ed-imgrow">
-            <div class="ed-thumb">${p.image ? `<img src="${esc(p.image)}" alt="">` : '<span class="dim">KEIN BILD</span>'}</div>
-            <button data-upload="${i}">BILD HOCHLADEN …</button>
-            ${p.image ? `<button class="danger" data-noimg="${i}">BILD ENTFERNEN</button>` : ''}
-          </div>
+          ${imageRow(`personnel.${i}.image`, p.image)}
         </div>`).join('')}
         <div class="ed-btns">${add('personnel', { name: 'NEUE PERSON', role: '', location: '', available: true, image: '' })}</div>
       </section>`,
+
+    commlog: () => `
+      <section class="ed-cone">
+        ${head('KOMMLOG – EIN- UND AUSGEHENDE KOMMUNIKATION')}
+        ${note('Nachrichten mit höherer Zugangsstufe sind für niedrigere Stufen unsichtbar. Ohne eigenes Bild wird das Bild der gleichnamigen Person aus PERSONAL verwendet.')}
+        ${(c.commlog || []).map((m, i) => `<div class="ed-person">
+          <div class="ed-crow">
+            ${input('DATUM', `commlog.${i}.date`, 'text', 'placeholder="2183.03.14"')}
+            ${input('UHRZEIT', `commlog.${i}.time`, 'text', 'placeholder="17:55"')}
+            ${select('ZUGANG', `commlog.${i}.access`, MSG_ACCESS)}
+            ${select('STATUS', `commlog.${i}.sent`, SENT_OPTS, 'boolsel')}
+            <button data-move="commlog.${i}" data-dir="-1">↑</button><button data-move="commlog.${i}" data-dir="1">↓</button>
+            ${del(`commlog.${i}`)}
+          </div>
+          <div class="ed-crow">
+            ${input('SENDER', `commlog.${i}.from`)}
+            ${input('EMPFÄNGER', `commlog.${i}.to`)}
+          </div>
+          ${input('BETREFF', `commlog.${i}.subject`)}
+          ${area('NACHRICHT', `commlog.${i}.text`, 'text', 4)}
+          ${imageRow(`commlog.${i}.image`, m.image)}
+        </div>`).join('')}
+        <div class="ed-btns">${add('commlog', { date: '2183.01.01', time: '12:00', from: '', to: '', subject: 'NEUE NACHRICHT', access: 'orange', sent: true, image: '', text: '' }, '+ NACHRICHT')}</div>
+      </section>`,
+
+    systems: () => `
+      <section class="ed-cone">
+        ${head('ZUGRIFF STATIONSSYSTEME – SCHALTFLÄCHEN')}
+        ${note('Platzhalter ohne Funktion. Reihenfolge = Reihenfolge im Raster (vier pro Zeile).')}
+        ${(c.systems || []).map((n, i) => `<div class="ed-crow">
+          ${input(`FELD ${i + 1}`, `systems.${i}`)}
+          <button data-move="systems.${i}" data-dir="-1">↑</button><button data-move="systems.${i}" data-dir="1">↓</button>
+          ${del(`systems.${i}`)}</div>`).join('')}
+        <div class="ed-btns">${add('systems', 'NEUES SYSTEM')}</div>
+      </section>`,
+
+    selfdestruct: () => `
+      <div class="ed-cgrid">
+        <section>
+          ${head('ABFRAGE')}
+          ${area('EINLEITUNG', 'selfdestruct.intro', 'lines', 3, 'eine Zeile pro Meldung')}
+          ${input('CODE-ABFRAGE', 'selfdestruct.codePrompt')}
+          ${input('CODE ANGENOMMEN', 'selfdestruct.codeOk')}
+          ${input('SICHERHEITSFRAGE', 'selfdestruct.confirm')}
+          ${input('ABBRUCH (BEI „NEIN“)', 'selfdestruct.cancelled')}
+          ${note('Jeder eingegebene Code wird akzeptiert. Mit „JA“ startet die Sequenz.')}
+        </section>
+        <section>
+          ${head('SEQUENZ')}
+          ${area('MELDUNGEN', 'selfdestruct.sequence', 'lines', 6, 'eine Zeile pro Meldung')}
+          ${input('COUNTDOWN (MINUTEN)', 'selfdestruct.minutes', 'num')}
+          ${input('COUNTDOWN-BESCHRIFTUNG', 'selfdestruct.countdownLabel')}
+          ${input('TEXT NACH DER DETONATION', 'selfdestruct.final')}
+          ${note('Abbrechen im Terminal: im Selbstzerstörungs-Fenster ABBRUCH eingeben (danach Code). Neu laden setzt alles zurück.')}
+        </section>
+      </div>`,
   };
+
+  // Vorschau der Sternenkarte im Reiter STERNENKARTE
+  let smVB = null;
+  let smSel = null;
+  function starPreview() {
+    const svg = root.querySelector('#sm-prev');
+    if (!svg) return;
+    const [x0, y0, x1, y1] = STARMAP.frame.map((v) => v * SM_S);
+    if (!smVB) smVB = { x: x0, y: y0, w: x1 - x0, h: y1 - y0 };
+    const setVB = () => svg.setAttribute('viewBox', `${smVB.x} ${smVB.y} ${smVB.w} ${smVB.h}`);
+    const draw = () => {
+      svg.replaceChildren();
+      const ns = 'http://www.w3.org/2000/svg';
+      const g = document.createElementNS(ns, 'g');
+      svg.appendChild(g);
+      const nodes = drawStarmapLayer(g, c.config, { editor: true });
+      if (smSel && nodes[smSel]) nodes[smSel].classList.add('sel');
+    };
+    const pick = (id) => {
+      smSel = id;
+      svg.querySelectorAll('.sel').forEach((n) => n.classList.remove('sel'));
+      svg.querySelector(`[data-sys="${id}"], [data-sec="${id}"]`)?.classList.add('sel');
+      root.querySelectorAll('.ed-smrow').forEach((r) => r.classList.toggle('on', r.dataset.smrow === id));
+      const row = root.querySelector(`[data-smrow="${id}"]`);
+      if (row) { row.scrollIntoView({ block: 'center' }); row.querySelector('input')?.focus(); }
+    };
+    setVB();
+    draw();
+    let drag = null;
+    svg.addEventListener('wheel', (e) => {
+      e.preventDefault();
+      const r = svg.getBoundingClientRect();
+      const k = e.deltaY > 0 ? 1.2 : 1 / 1.2;
+      const s = Math.max(smVB.w / r.width, smVB.h / r.height);
+      const mx = smVB.x + (e.clientX - r.left - (r.width - smVB.w / s) / 2) * s;
+      const my = smVB.y + (e.clientY - r.top - (r.height - smVB.h / s) / 2) * s;
+      const w = Math.min(x1 - x0, Math.max(200, smVB.w * k));
+      const f = w / smVB.w;
+      smVB = { x: mx - (mx - smVB.x) * f, y: my - (my - smVB.y) * f, w, h: smVB.h * f };
+      setVB();
+    }, { passive: false });
+    svg.addEventListener('pointerdown', (e) => { drag = { x: e.clientX, y: e.clientY, vb: { ...smVB }, moved: false }; });
+    svg.addEventListener('pointermove', (e) => {
+      if (!drag) return;
+      const r = svg.getBoundingClientRect();
+      const s = Math.max(smVB.w / r.width, smVB.h / r.height);
+      const dx = e.clientX - drag.x;
+      const dy = e.clientY - drag.y;
+      if (Math.hypot(dx, dy) > 4) drag.moved = true;
+      if (drag.moved) { smVB = { ...drag.vb, x: drag.vb.x - dx * s, y: drag.vb.y - dy * s }; setVB(); }
+    });
+    svg.addEventListener('pointerup', (e) => {
+      const d = drag;
+      drag = null;
+      if (!d || d.moved) return;
+      const hit = e.target.closest('[data-sys], [data-sec]');
+      if (hit) pick(hit.dataset.sys || hit.dataset.sec);
+    });
+    svg.addEventListener('pointerleave', () => { drag = null; });
+    root.querySelectorAll('[data-smredraw]').forEach((inp) => {
+      inp.addEventListener('input', () => draw());
+      inp.addEventListener('focus', () => {
+        const id = inp.closest('[data-smrow]').dataset.smrow;
+        if (smSel !== id) { smSel = id; draw(); root.querySelectorAll('.ed-smrow').forEach((r) => r.classList.toggle('on', r.dataset.smrow === id)); }
+      });
+    });
+    if (smSel) root.querySelector(`[data-smrow="${smSel}"]`)?.classList.add('on');
+  }
 
   function blockEditor(path, b, i, n) {
     const type = select('BAUSTEIN', `${path}.type`, BLOCK_TYPES);
@@ -301,9 +462,10 @@ export function createContentEditor(root, { level, getLayer, setRoomStatus, toas
       el.addEventListener(el.tagName === 'SELECT' || el.type === 'checkbox' ? 'change' : 'input', () => {
         setPath(c, el.dataset.path, conv.set(el.type === 'checkbox' ? el.checked : el.value));
         save();
-        if (el.tagName === 'SELECT' && /\.(type|room)$/.test(el.dataset.path)) render();
+        if (el.tagName === 'SELECT' && /\.(type|room|topic)$/.test(el.dataset.path)) render();
       });
     });
+    if (tab === 'stars') starPreview();
     root.querySelectorAll('[data-add]').forEach((b) => b.addEventListener('click', () => {
       const list = getPath(c, b.dataset.add);
       list.push(JSON.parse(b.dataset.tpl));
@@ -341,7 +503,7 @@ export function createContentEditor(root, { level, getLayer, setRoomStatus, toas
       f.onchange = async () => {
         if (!f.files[0]) return;
         try {
-          c.personnel[Number(b.dataset.upload)].image = await shrinkImage(f.files[0]);
+          setPath(c, b.dataset.upload, await shrinkImage(f.files[0]));
           saveContent(c);
           render();
           toast('BILD GESPEICHERT');
@@ -350,7 +512,7 @@ export function createContentEditor(root, { level, getLayer, setRoomStatus, toas
       f.click();
     }));
     root.querySelectorAll('[data-noimg]').forEach((b) => b.addEventListener('click', () => {
-      c.personnel[Number(b.dataset.noimg)].image = '';
+      setPath(c, b.dataset.noimg, '');
       saveContent(c);
       render();
     }));
@@ -381,6 +543,9 @@ export function createContentEditor(root, { level, getLayer, setRoomStatus, toas
       if (tab === 'reports') { c.topics = d.topics; topicIdx = 0; }
       if (tab === 'menu') c.menu = d.menu;
       if (tab === 'people') c.personnel = d.personnel;
+      if (tab === 'commlog') c.commlog = d.commlog;
+      if (tab === 'systems') c.systems = d.systems;
+      if (tab === 'selfdestruct') c.selfdestruct = d.selfdestruct;
       saveContent(c);
       render();
       toast('ZURÜCKGESETZT');

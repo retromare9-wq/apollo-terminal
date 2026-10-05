@@ -149,4 +149,16 @@ export const sound = {
     noise(1.8, { freq: 120, sweep: 600, q: 0.8, gain: 0.04, attack: 0.9, type: 'lowpass' });
     [0.9, 1.25, 1.5].forEach((w) => clack(w, 1));
   },
+
+  // Alarmsirene (Selbstzerstörung): an- und abschwellender Zweiklang
+  alarm() {
+    tone(330, 0.9, { type: 'sawtooth', gain: 0.07, slide: 520, attack: 0.05, cutoff: 1400 });
+    tone(520, 0.9, { type: 'sawtooth', gain: 0.06, slide: 330, attack: 0.05, cutoff: 1400, when: 0.95 });
+  },
+
+  // Detonation
+  boom() {
+    noise(3.5, { freq: 900, sweep: 60, q: 0.6, gain: 0.25, attack: 0.01, type: 'lowpass' });
+    tone(48, 3, { type: 'sawtooth', gain: 0.2, slide: 22, attack: 0.01, cutoff: 200 });
+  },
 };

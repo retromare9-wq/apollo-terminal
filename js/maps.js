@@ -161,7 +161,7 @@ export class MapView {
     Object.assign(this, { root, config, station, sound, onLevel });
     root.innerHTML = `
       <svg class="map-svg" viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid meet"></svg>
-      <div class="hud hud-tl"><div>RANGE</div><div class="hud-range">${LEVELS.map((_, i) => `<span>${i + 1}</span>`).join('')}</div><div class="dim">RINGS ON</div></div>
+      <div class="hud hud-tl"><div>RANGE</div><div class="hud-range">${LEVELS.slice(0, 3).map((_, i) => `<span>${i + 1}</span>`).join('')}</div></div>
       <div class="hud hud-tr"><div>R VECTORS</div><div class="dim">TRAILS OFF</div></div>
       <div class="hud hud-bl"><div class="hud-dist"></div><span class="hud-state">STBY</span></div>
       <div class="hud hud-br">L VECTORS</div>

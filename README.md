@@ -4,12 +4,34 @@ Interaktives Stationsterminal **A.P.O.L.L.O.** für ALIEN RPG: Die Spieler stell
 
 > **Stand: Design-Prototyp.** Chat-Antworten werden noch simuliert. Die Spielleiter-Konsole fürs Handy folgt im nächsten Schritt.
 
+## Anmeldung & Zugangsstufen
+
+Nach dem Start fragt A.P.O.L.L.O. nach der Identität:
+
+- **Name eintippen + Enter**, danach Zugangsstufe wählen: **Grün**, **Orange**, **Rot** oder **Direktzugang Mainframe**
+- **[A] Gastzugang**: automatisch Stufe Grün
+- **[B] Direktzugang Mainframe (Computerraum)**: Stufe Rot plus Selbstzerstörung
+
+| Stufe | Sichtbar |
+|---|---|
+| Grün | Stationsplan, Mond-, System-, Sternenkarte, Interkom, Hilfe |
+| Orange | zusätzlich Berichte (Schaden, Lebenserhaltung, Energie …) und **KOMMLOG** |
+| Rot | zusätzlich **ZUGRIFF STATIONSSYSTEME** |
+| Mainframe | zusätzlich **SELBSTZERSTÖRUNG EINLEITEN** |
+
+Die Menütasten (A, B, C …) werden je nach Stufe automatisch vergeben. Gesperrte Kategorien
+melden bei freier Eingabe „ZUGRIFF VERWEIGERT“. Benutzer und Stufe stehen unten rechts.
+`ABMELDEN` + Enter beendet die Sitzung.
+
+**Selbstzerstörung:** beliebigen Code eingeben, mit `JA` bestätigen → Countdown mit Alarm.
+Im Selbstzerstörungs-Fenster bricht `ABBRUCH` (danach Code) ab; neu laden setzt alles zurück.
+
 ## Bedienung
 
 | Taste | Funktion |
 |---|---|
 | Frage eintippen + Enter | Freie Anfrage, z. B. „Gibt es Schäden?“ |
-| Buchstabe + Enter | Menüpunkt direkt wählen (A–I) |
+| Buchstabe + Enter | Menüpunkt direkt wählen |
 | ↑ ↓ | Auswahl im Menü bzw. Interkom; auf Karten: eine Ebene zurück / tiefer |
 | A + Enter (Karte) | Zum markierten Ziel zoomen: Sternenkarte → System → Mond → Station |
 | Enter (leer) | Ausgewählten Punkt öffnen bzw. Textausgabe überspringen |
@@ -30,10 +52,14 @@ Während einer Karten-Animation überspringt jede Taste direkt zum Ziel.
 
 - **STATIONSPLAN**: Karten-Editor (siehe unten)
 - **ALLGEMEIN**: Namen von Computer, Station, Mond, Planet, Stern, Sektor; Begrüßung, Statusanzeige im Menü, Startsequenz, Interkom-Antworten
-- **STERNEN-/SYSTEM-/MONDKARTE**: alle Beschriftungen und Datenzeilen der Karten
+- **STERNENKARTE**: Sternensysteme und Sektoren benennen (in der Kartenvorschau anklicken), Datenpanel, Legende
+- **SYSTEM-/MONDKARTE**: alle Beschriftungen und Datenzeilen der Karten
 - **SCHADENSBERICHT**: Einleitung, Fälle, Hüllenintegrität, Empfehlung; Fälle mit Raum setzen den Raumstatus direkt im Stationsplan
 - **BERICHTE**: Titel, Schlüsselwörter und Inhalt aller Kategorien; neue Berichte anlegen
-- **MENÜ** und **PERSONAL**: Hauptmenü und Stationsbewohner
+- **MENÜ** und **PERSONAL**: Hauptmenü mit Zugangsstufe je Kategorie, Stationsbewohner
+- **KOMMLOG**: Nachrichten mit Datum, Uhrzeit, Sender, Empfänger, Betreff, Zugangsstufe, Status, Text und Absenderbild
+- **STATIONSSYSTEME**: Beschriftung der Schaltflächen
+- **SELBSTZERSTÖRUNG**: alle Texte der Abfrage und Sequenz, Countdown-Dauer
 
 Alle Texte werden im Browser gespeichert, das Terminal übernimmt sie sofort. **Exportieren**
 sichert Karte, Ausrüstung und Texte in einer Datei.
@@ -75,7 +101,10 @@ Alle Texte stehen in [`js/data.js`](js/data.js):
 - `STATION`: Ebenen des Stationsplans (Grundriss aus `js/station-level0.js`, editierbare Ebene aus dem Karten-Editor)
 - `PERSONNEL`: Bewohner für das Interkom (optional mit Profilbild)
 
-Wörter wie KRITISCH, WARNUNG, OFFLINE oder NICHT ERREICHBAR werden in Berichten automatisch eingefärbt.
+Wörter wie SCHADEN, WARNUNG, OFFLINE oder NICHT ERREICHBAR werden in Berichten automatisch eingefärbt.
+
+Die Sternenkarte ist eine Vektor-Nachzeichnung der Vorlage „Stars of the Middle Heavens“
+(`js/starmap-data.js`, erzeugt mit den Skripten in `tools/starmap`).
 
 ## Lokal starten
 
