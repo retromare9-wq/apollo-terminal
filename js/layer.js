@@ -25,8 +25,18 @@ export const STATUS = {
 export const DOOR_LEN = 30;
 export const DOOR_T = 9;
 
+// Felder der ausführlichen Raumbeschreibung (Reihenfolge wie im Editor)
+export const DESC_FIELDS = [
+  ['aesthetic', 'ALLGEMEINE ÄSTHETIK & DESIGNPRINZIPIEN'],
+  ['smell', 'WAS RIECHT MAN'],
+  ['sight', 'WAS SIEHT MAN'],
+  ['sound', 'WAS HÖRT MAN'],
+  ['investigate', 'WAS ERFÄHRT MAN NACH GENAUERER UNTERSUCHUNG'],
+];
+export const MAX_PICTOS = 5;
+
 export function emptyLayer() {
-  return { doors: [], lines: [], cams: [], rooms: {}, settings: { showCams: true } };
+  return { doors: [], lines: [], cams: [], rooms: {}, lifts: {}, settings: { showCams: true } };
 }
 
 function normalize(l) {
@@ -36,6 +46,7 @@ function normalize(l) {
     lines: Array.isArray(l?.lines) ? l.lines : e.lines,
     cams: Array.isArray(l?.cams) ? l.cams : e.cams,
     rooms: l?.rooms && typeof l.rooms === 'object' ? l.rooms : e.rooms,
+    lifts: l?.lifts && typeof l.lifts === 'object' ? l.lifts : e.lifts,
     settings: { ...e.settings, ...(l?.settings || {}) },
   };
 }
@@ -82,8 +93,7 @@ export function corridorAt(level, x, y) {
 export function containerRects(level, x, y) {
   const room = roomAt(level, x, y);
   if (room) return room.rects;
-  const c = corridorAt(level, x, y);
-  return c ? [c] : null;
+  return corridorAt(level, x, y) ? level.corridors : null;
 }
 
 // Tür an der Mausposition einrasten: quer über einen Gang oder auf die nächste Raumwand.

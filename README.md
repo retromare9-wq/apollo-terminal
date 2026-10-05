@@ -15,6 +15,7 @@ Interaktives Stationsterminal **A.P.O.L.L.O.** für ALIEN RPG: Die Spieler stell
 | Enter (leer) | Ausgewählten Punkt öffnen bzw. Textausgabe überspringen |
 | Esc | Zurück / Verbindung trennen |
 | ← → (Stationsplan) | Räume nacheinander auswählen; alternativ Raum-ID eintippen, z. B. `XENO-2` |
+| F8 | Retro-Modus an/aus (Bitmap-Schrift, grobe Rasterzeilen) |
 | F9 | Ton an/aus |
 | F10 | Röhrenmonitor-Effekt an/aus |
 | F11 | Vollbild (Browser) |
@@ -33,10 +34,14 @@ und Notiz eintragen.
 | 2 | Tür (in einen Gang oder an eine Raumwand klicken) |
 | 3 | Trennlinie (Anfang und Ende klicken) |
 | 4 | Kamera (gelben Punkt ziehen = Richtung und Reichweite) |
-| 5 | Raum benennen |
+| 5 | Raum: ID, Name, Bereich, Status, Notiz · „Raumbeschreibung öffnen“ für Ästhetik, Sinneseindrücke, Untersuchung, Gegenstände und Piktogramme |
 | 6 | Radierer |
+| 7 | Piktogramm (Semiotic Standard, bis zu 5 pro Raum) |
 | G / O / R | Sicherheitsstufe (auch für die gewählte Tür) |
 | Entf · Strg+Z · Strg+Y | Löschen · Rückgängig · Wiederholen |
+
+Aufzüge anklicken öffnet das Aufzugsmenü (Buchstabe, Sicherheitsstufe, „Zugang zu“).
+**Raumliste PDF/ODT** exportiert alle Räume mit sämtlichen Angaben.
 
 Gespeichert wird automatisch im Browser; ein offenes Terminal im selben Browser übernimmt
 Änderungen sofort. **Exportieren** lädt die Ebene als JSON-Datei herunter (Sicherung oder

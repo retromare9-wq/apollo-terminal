@@ -4,19 +4,24 @@
 
 import { el, txt } from './svg.js';
 import { drawLayer } from './layer.js';
+import { semioticById } from './semiotic.js';
 
 const ASPECT = 446 / 1000;
 
 export function roomName(level, room, layer) {
   const custom = layer?.rooms?.[room.id]?.name;
   if (custom) return custom.toUpperCase();
+  if (room.unit) return `${room.kind === 'family' ? 'FAMILIENQUARTIER' : 'EINZELQUARTIER'} ${room.unit}`;
   const zone = level.zones[room.zone] || room.zone.toUpperCase();
-  if (room.unit) return `WOHNEINHEIT ${room.unit}`;
   if (room.label) return `${zone} ${room.label}`;
   return `${zone} ${room.id.split('-').slice(1).join('-')}`;
 }
 
-function bbox(rects) {
+export const roomCode = (room, layer) => layer?.rooms?.[room.id]?.code || room.id;
+export const roomZone = (level, room, layer) => layer?.rooms?.[room.id]?.zoneName || level.zones[room.zone] || room.zone.toUpperCase();
+export const liftData = (l, layer) => ({ letter: l.id, sec: '', access: '', ...(layer?.lifts?.[l.id] || {}) });
+
+export function bbox(rects) {
   return rects.reduce((b, r) => [Math.min(b[0], r[0]), Math.min(b[1], r[1]), Math.max(b[2], r[2]), Math.max(b[3], r[3])],
     [Infinity, Infinity, -Infinity, -Infinity]);
 }
@@ -32,14 +37,15 @@ export function frame(b, pad) {
   return { x: cx - w / 2, y: cy - h / 2, w, h };
 }
 
-function lift(g, l) {
+function lift(g, l, layer) {
+  const data = liftData(l, layer);
   const [x0, y0, x1, y1] = l.rect;
   const horizontal = l.dark === 'dl' || l.dark === 'dr';
   const mx = (x0 + x1) / 2;
   const my = (y0 + y1) / 2;
   const car = { dl: [x0, y0, mx, y1], dr: [mx, y0, x1, y1], dt: [x0, y0, x1, my], db: [x0, my, x1, y1] }[l.dark];
   const shaft = { dl: [mx, y0, x1, y1], dr: [x0, y0, mx, y1], dt: [x0, my, x1, y1], db: [x0, y0, x1, my] }[l.dark];
-  const lg = el('g', { class: 'st-lift' }, g);
+  const lg = el('g', { class: `st-lift${data.sec ? ` sec-${data.sec}` : ''}`, 'data-lift': l.id }, g);
   el('rect', { x: shaft[0], y: shaft[1], width: shaft[2] - shaft[0], height: shaft[3] - shaft[1], class: 'st-shaft' }, lg);
   // Leitersprossen im Leitergang
   for (let i = 1; i < 4; i++) {
@@ -53,10 +59,10 @@ function lift(g, l) {
   }
   el('rect', { x: car[0], y: car[1], width: car[2] - car[0], height: car[3] - car[1], class: 'st-car' }, lg);
   el('path', { d: `M${car[0] + 6} ${car[1] + 6} L${car[2] - 6} ${car[3] - 6} M${car[2] - 6} ${car[1] + 6} L${car[0] + 6} ${car[3] - 6}`, class: 'st-cross' }, lg);
-  if (l.id) {
+  if (data.letter) {
     const lx = horizontal ? x0 - 10 : (x0 + x1) / 2;
     const ly = horizontal ? (y0 + y1) / 2 : y0 - 12;
-    const name = l.id === 'MF' ? 'MAINFRAME ▼ -1' : l.id;
+    const name = l.id === 'MF' && data.letter === 'MF' ? 'MAINFRAME ▼ -1' : data.letter;
     txt(g, lx, ly, name, 'st-liftid', { 'text-anchor': horizontal ? 'end' : 'middle', 'dominant-baseline': horizontal ? 'middle' : 'auto' });
   }
 }
@@ -86,7 +92,7 @@ export function drawStationPlan(g, cfg, level, layer, opts = {}) {
   });
 
   const liftLayer = el('g', {}, g);
-  level.lifts.forEach((l) => lift(liftLayer, l));
+  level.lifts.forEach((l) => lift(liftLayer, l, layer));
 
   // Beschriftungen: Raumnummern, Statusmarken, Bereichsnamen
   const labelLayer = el('g', {}, g);
@@ -98,6 +104,17 @@ export function drawStationPlan(g, cfg, level, layer, opts = {}) {
     if (label) {
       const big = label.length > 3;
       txt(labelLayer, b[0] + 8, b[1] + 8, label.toUpperCase(), big ? 'st-name' : 'st-num', { 'dominant-baseline': 'hanging' });
+    }
+    const pics = (layer.rooms[room.id]?.picto || []).filter((p) => p.map).slice(0, 5);
+    if (pics.length) {
+      const size = Math.min(26, (b[2] - b[0] - 8) / pics.length - 3, b[3] - b[1] - 8);
+      pics.forEach((p, i) => {
+        const s = semioticById(p.id);
+        if (!s) return;
+        const x = b[2] - 4 - (pics.length - i) * (size + 3) + 3;
+        const ig = el('g', { transform: `translate(${x} ${b[1] + 4}) scale(${size / 100})`, class: 'st-picto' }, labelLayer);
+        ig.innerHTML = s.svg;
+      });
     }
     if (status) {
       const sym = { warn: '▲', damage: '▲', offline: '■', sealed: '◆' }[status] || '▲';
@@ -112,13 +129,7 @@ export function drawStationPlan(g, cfg, level, layer, opts = {}) {
   const exit = level.corridors.reduce((m, c) => (c[2] > m[2] ? c : m));
   txt(labelLayer, exit[2] + 30, (exit[1] + exit[3]) / 2, 'ZUM FLUGFELD ▶', 'st-zone', { 'dominant-baseline': 'middle' });
 
-  // Maßstab: ca. 20 Einheiten pro Meter
-  const sx = bx1 - 520;
-  const sy = by1 + 40;
-  el('path', { d: `M${sx} ${sy - 12} V${sy} H${sx + 500} V${sy - 12}`, class: 'st-scale' }, labelLayer);
-  txt(labelLayer, sx + 250, sy - 18, '25 M', 'st-zone', { 'text-anchor': 'middle' });
-
-  const home = frame([bx0, by0, bx1, by1 + 50], 90);
+  const home = frame([bx0, by0, bx1, by1], 90);
   return {
     title: `STATIONSPLAN ${cfg.stationCode} // ${level.name}`,
     target: { x: home.x + home.w / 2, y: home.y + home.h / 2 },

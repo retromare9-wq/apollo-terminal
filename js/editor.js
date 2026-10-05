@@ -1,11 +1,14 @@
 // Karten-Editor: Türen, Trennlinien, Kameras und Raumdaten auf einem Stationsplan eintragen.
 import { CONFIG, STATION } from './data.js';
 import { el } from './svg.js';
-import { drawStationPlan, roomName, frame } from './stationplan.js';
+import { drawStationPlan, roomName, roomCode, roomZone, liftData } from './stationplan.js';
 import {
-  CAM, SECURITY, STATUS, UNITS_PER_M, loadLayer, saveLayer, emptyLayer, importLayer,
+  CAM, SECURITY, STATUS, UNITS_PER_M, DESC_FIELDS, MAX_PICTOS, loadLayer, saveLayer, emptyLayer, importLayer,
   snapDoor, roomAt, containerRects, camHandle, roomDoors, roomCams,
 } from './layer.js';
+import { SEMIOTIC, semioticSvg, semioticById } from './semiotic.js';
+import { equipmentList, equipmentCategories, saveItem, deleteItem, exportEquipment, importEquipment } from './equipment.js';
+import { makeOdt } from './odt.js';
 
 const LV = STATION.levels[0];
 const level = LV.plan;
@@ -24,13 +27,15 @@ const TOOLS = [
   { id: 'door', key: '2', label: 'TÜR', hint: 'In einen Gang klicken (Tür quer zum Gang) oder an eine Raumwand (Tür in der Wand). Stufe links wählen.' },
   { id: 'line', key: '3', label: 'TRENNLINIE', hint: 'Anfangspunkt klicken, dann Endpunkt klicken · Esc bricht ab · rastet am Raster ein' },
   { id: 'cam', key: '4', label: 'KAMERA', hint: 'In einen Raum oder Gang klicken · gelben Punkt ziehen = Richtung und Reichweite' },
-  { id: 'room', key: '5', label: 'RAUM BENENNEN', hint: 'Raum anklicken, rechts Name, Status und Notiz eintragen' },
+  { id: 'room', key: '5', label: 'RAUM', hint: 'Raum anklicken: rechts ID, Name, Bereich, Status und Notiz bearbeiten · Raumbeschreibung öffnen' },
   { id: 'erase', key: '6', label: 'RADIERER', hint: 'Tür, Linie oder Kamera anklicken zum Löschen' },
+  { id: 'picto', key: '7', label: 'PIKTOGRAMM', hint: 'Piktogramm links auswählen, dann in einen Raum klicken (höchstens 5 pro Raum)' },
 ];
 
 const st = {
   tool: 'select',
   sec: 'green',
+  picto: 1,
   sel: null,          // { kind: 'door'|'line'|'cam'|'room', id }
   lineStart: null,
   ghost: null,
@@ -76,6 +81,22 @@ function updateButtons() {
 }
 function validateSel() {
   if (st.sel && st.sel.kind !== 'room' && !find(st.sel.kind, st.sel.id)) st.sel = null;
+}
+
+const roomById = (id) => level.rooms.find((r) => r.id === id);
+
+// Raumdaten ändern; leere Angaben werden entfernt
+function patchRoom(id, patch) {
+  const d = { ...(layer.rooms[id] || {}), ...patch };
+  for (const k of Object.keys(d)) {
+    if (d[k] === '' || d[k] == null || (Array.isArray(d[k]) && !d[k].length)) delete d[k];
+  }
+  if (Object.keys(d).length) layer.rooms[id] = d; else delete layer.rooms[id];
+}
+function patchLift(id, patch) {
+  const d = { ...(layer.lifts[id] || {}), ...patch };
+  for (const k of Object.keys(d)) if (d[k] === '' || d[k] == null) delete d[k];
+  if (Object.keys(d).length) layer.lifts[id] = d; else delete layer.lifts[id];
 }
 
 const listOf = (kind) => ({ door: layer.doors, line: layer.lines, cam: layer.cams }[kind]);
@@ -145,6 +166,7 @@ function render() {
   ui = el('g', {}, svg);
   // Auswahl markieren
   if (st.sel?.kind === 'room') info.plan.nodes[st.sel.id]?.classList.add('sel');
+  else if (st.sel?.kind === 'lift') svg.querySelector(`[data-lift="${st.sel.id}"]`)?.classList.add('ed-sel');
   else if (st.sel) info.plan.objects[st.sel.id]?.classList.add('ed-sel');
   const cam = st.sel?.kind === 'cam' ? find('cam', st.sel.id) : null;
   if (cam) {
@@ -248,38 +270,68 @@ function renderProps() {
       <div class="ed-btns"><button class="danger" data-del>LINIE LÖSCHEN</button></div>
       <p class="ed-note">Mit dem Auswahl-Werkzeug ziehen, um die Linie zu verschieben.</p>`;
   } else if (sel.kind === 'room') {
-    const room = level.rooms.find((r) => r.id === sel.id);
+    const room = roomById(sel.id);
     const data = layer.rooms[room.id] || {};
     const doors = roomDoors(layer, room);
+    const pics = data.picto || [];
     props.innerHTML = `
       <h3>${esc(roomName(level, room, layer))}</h3>
-      <div class="ed-row"><span class="dim">ID</span><span>${room.id}</span></div>
-      <div class="ed-row"><span class="dim">BEREICH</span><span>${level.zones[room.zone] || room.zone}</span></div>
       <div class="ed-row"><span class="dim">TÜREN</span><span>${doors.length}</span></div>
       <div class="ed-row"><span class="dim">KAMERAS</span><span>${roomCams(layer, room).length}</span></div>
+      <label class="ed-field">RAUM-ID <input type="text" data-k="code" maxlength="20" value="${esc(data.code)}" placeholder="${esc(room.id)}"></label>
       <label class="ed-field">NAME <input type="text" data-k="name" maxlength="40" value="${esc(data.name)}" placeholder="${esc(roomName(level, room, { rooms: {} }))}"></label>
+      <label class="ed-field">BEREICH <input type="text" data-k="zoneName" maxlength="40" value="${esc(data.zoneName)}" placeholder="${esc(level.zones[room.zone] || room.zone)}"></label>
       <label class="ed-field">STATUS <select data-k="status">${Object.entries(STATUS).map(([k, v]) => `<option value="${k}" ${(data.status || '') === k ? 'selected' : ''}>${v}</option>`).join('')}</select></label>
       <label class="ed-field">NOTIZ (ERSCHEINT IM TERMINAL) <textarea data-k="info" maxlength="300">${esc(data.info)}</textarea></label>
-      <div class="ed-btns"><button data-reset>RAUMDATEN ZURÜCKSETZEN</button></div>`;
-    props.querySelectorAll('[data-k]').forEach((inp) => {
-      inp.addEventListener('focus', snapshot);
-      inp.addEventListener(inp.tagName === 'SELECT' ? 'change' : 'input', () => {
-        const d = { ...(layer.rooms[room.id] || {}) };
-        d[inp.dataset.k] = inp.value.trim() ? inp.value : '';
-        if (!d.name && !d.status && !d.info) delete layer.rooms[room.id];
-        else layer.rooms[room.id] = d;
-        commit();
-        props.querySelector('h3').textContent = roomName(level, room, layer);
-      });
-    });
+      <div class="ed-field">PIKTOGRAMME (${pics.length}/${MAX_PICTOS})</div>
+      <div class="ed-pics">${pics.map((p) => `<span class="ed-pic ${p.map ? 'on-map' : ''}" title="${esc(semioticById(p.id)?.name)}${p.map ? ' · auf der Karte' : ''}">${semioticSvg(p.id, 34)}</span>`).join('') || '<span class="dim">KEINE</span>'}</div>
+      <div class="ed-btns"><button data-detail>RAUMBESCHREIBUNG ÖFFNEN ▸</button><button data-reset>ZURÜCKSETZEN</button></div>`;
+    bindRoomFields(props, room);
+    props.querySelector('[data-detail]').addEventListener('click', () => openDetail(room.id));
     props.querySelector('[data-reset]').addEventListener('click', () => {
+      if (!confirm('Alle Angaben zu diesem Raum löschen?')) return;
       snapshot();
       delete layer.rooms[room.id];
       commit();
       renderProps();
     });
+  } else if (sel.kind === 'lift') {
+    const lift = level.lifts.find((l) => l.id === sel.id);
+    const data = liftData(lift, layer);
+    props.innerHTML = `
+      <h3>AUFZUG ${esc(data.letter || lift.id)}</h3>
+      <label class="ed-field">BUCHSTABE <input type="text" data-k="letter" maxlength="12" value="${esc(layer.lifts[lift.id]?.letter)}" placeholder="${esc(lift.id)}"></label>
+      <div class="ed-field">SICHERHEITSSTUFE</div>
+      <div class="ed-secs">
+        <button class="ed-sec ${!data.sec ? 'on' : ''}" data-lsec=""><i style="background:transparent;border:1px solid var(--amber-dim)"></i>KEINE ANGABE</button>
+        ${Object.entries(SECURITY).map(([k, v]) => `<button class="ed-sec ${data.sec === k ? 'on' : ''}" data-lsec="${k}"><i style="background:var(--sec-${k})"></i>${v.label}</button>`).join('')}
+      </div>
+      <label class="ed-field">ZUGANG ZU <textarea data-k="access" maxlength="400" placeholder="z. B. LEVEL -1 · APOLLO MAINFRAME">${esc(data.access)}</textarea></label>`;
+    props.querySelectorAll('[data-k]').forEach((inp) => {
+      inp.addEventListener('focus', snapshot);
+      inp.addEventListener('input', () => { patchLift(lift.id, { [inp.dataset.k]: inp.value.trim() ? inp.value : '' }); commit(); });
+    });
+    props.querySelectorAll('[data-lsec]').forEach((b) => b.addEventListener('click', () => {
+      snapshot();
+      patchLift(lift.id, { sec: b.dataset.lsec });
+      commit();
+      renderProps();
+    }));
   }
   props.querySelector('[data-del]')?.addEventListener('click', () => remove(sel.kind, sel.id));
+}
+
+function bindRoomFields(root, room) {
+  root.querySelectorAll('[data-k]').forEach((inp) => {
+    inp.addEventListener('focus', snapshot);
+    inp.addEventListener(inp.tagName === 'SELECT' ? 'change' : 'input', () => {
+      patchRoom(room.id, { [inp.dataset.k]: inp.value.trim() ? inp.value : '' });
+      commit();
+      root.querySelectorAll('[data-title]').forEach((t) => { t.textContent = roomName(level, room, layer); });
+      const h = props.querySelector('h3');
+      if (h && st.sel?.id === room.id) h.textContent = roomName(level, room, layer);
+    });
+  });
 }
 
 function setDoorSec(d, sec) {
@@ -303,6 +355,7 @@ function setTool(id) {
   svg.classList.toggle('tool-select', id === 'select');
   document.querySelectorAll('.ed-tool').forEach((b) => b.classList.toggle('on', b.dataset.tool === id));
   $('#hint').textContent = TOOLS.find((t) => t.id === id).hint;
+  $('#pictos').hidden = id !== 'picto';
   drawUi();
   if (!st.sel) renderProps();
 }
@@ -330,6 +383,9 @@ function onDown(e) {
     svg.setPointerCapture(e.pointerId);
     return;
   }
+
+  const liftEl = e.target.closest?.('[data-lift]');
+  if (liftEl && (st.tool === 'select' || st.tool === 'room')) { select({ kind: 'lift', id: liftEl.dataset.lift }); return; }
 
   if (st.tool === 'select') {
     const obj = objectAt(e);
@@ -390,7 +446,216 @@ function onDown(e) {
     const room = roomAt(level, pt.x, pt.y);
     if (room) select({ kind: 'room', id: room.id });
     else toast('KEIN RAUM AN DIESER STELLE');
+    return;
   }
+  if (st.tool === 'picto') {
+    const room = roomAt(level, pt.x, pt.y);
+    if (!room) { toast('PIKTOGRAMME NUR IN RÄUMEN'); return; }
+    addPicto(room.id, st.picto, true);
+    select({ kind: 'room', id: room.id });
+  }
+}
+
+function addPicto(roomId, pid, map) {
+  const pics = [...(layer.rooms[roomId]?.picto || [])];
+  if (pics.some((p) => p.id === pid)) { toast('DIESES PIKTOGRAMM HAT DER RAUM SCHON'); return false; }
+  if (pics.length >= MAX_PICTOS) { toast(`HÖCHSTENS ${MAX_PICTOS} PIKTOGRAMME PRO RAUM`); return false; }
+  snapshot();
+  pics.push({ id: pid, map });
+  patchRoom(roomId, { picto: pics });
+  commit();
+  return true;
+}
+
+// ---------- Raumbeschreibung (eigenes Fenster) ----------
+
+const detail = $('#detail');
+let detailRoom = null;
+
+function openDetail(id) {
+  detailRoom = id;
+  detail.hidden = false;
+  renderDetail();
+}
+function closeDetail() {
+  detail.hidden = true;
+  detailRoom = null;
+  renderProps();
+}
+
+function renderDetail() {
+  const room = roomById(detailRoom);
+  if (!room) return;
+  const data = layer.rooms[room.id] || {};
+  const doors = roomDoors(layer, room);
+  const pics = data.picto || [];
+  const items = data.items || [];
+  const field = (k, label, max = 3000) => `<label class="ed-field">${label}<textarea data-k="${k}" maxlength="${max}">${esc(data[k])}</textarea></label>`;
+  detail.innerHTML = `
+    <div class="ed-dwin">
+      <header class="ed-dhead">
+        <div><span class="dim">RAUMBESCHREIBUNG // ${esc(level.name)}</span><h2 data-title>${esc(roomName(level, room, layer))}</h2></div>
+        <button data-close>SCHLIESSEN ✕</button>
+      </header>
+      <div class="ed-dbody">
+        <section class="ed-dcol">
+          <div class="ed-head">RAUMDATEN</div>
+          <label class="ed-field">RAUM-ID <input type="text" data-k="code" maxlength="20" value="${esc(data.code)}" placeholder="${esc(room.id)}"></label>
+          <label class="ed-field">NAME <input type="text" data-k="name" maxlength="40" value="${esc(data.name)}" placeholder="${esc(roomName(level, room, { rooms: {} }))}"></label>
+          <label class="ed-field">BEREICH <input type="text" data-k="zoneName" maxlength="40" value="${esc(data.zoneName)}" placeholder="${esc(level.zones[room.zone] || room.zone)}"></label>
+          <label class="ed-field">STATUS <select data-k="status">${Object.entries(STATUS).map(([k, v]) => `<option value="${k}" ${(data.status || '') === k ? 'selected' : ''}>${v}</option>`).join('')}</select></label>
+          <div class="ed-row"><span class="dim">EBENE</span><span>${esc(level.name)}</span></div>
+          <div class="ed-row"><span class="dim">TÜREN</span><span>${doors.length}${doors.length ? ` · ${['green', 'orange', 'red'].map((k) => { const n = doors.filter((d) => (d.sec || 'green') === k).length; return n ? `<span class="sec-t sec-${k}">${n}× ${SECURITY[k].label}</span>` : ''; }).filter(Boolean).join(' ')}` : ''}</span></div>
+          <div class="ed-row"><span class="dim">KAMERAS</span><span>${roomCams(layer, room).length}</span></div>
+          <label class="ed-field">NOTIZ (ERSCHEINT IM TERMINAL) <textarea data-k="info" maxlength="300">${esc(data.info)}</textarea></label>
+
+          <div class="ed-head">PIKTOGRAMME (${pics.length}/${MAX_PICTOS})</div>
+          <div class="ed-dpics">
+            ${pics.map((p, i) => `<div class="ed-dpic">${semioticSvg(p.id, 54)}<div><b>${esc(semioticById(p.id)?.name)}</b><br><span class="dim">${esc(semioticById(p.id)?.de)}</span>
+              <label class="ed-check"><input type="checkbox" data-pmap="${i}" ${p.map ? 'checked' : ''}> AUF DER KARTE ZEIGEN</label></div>
+              <button class="danger" data-pdel="${i}" title="Entfernen">✕</button></div>`).join('') || '<p class="dim">Noch keine Piktogramme. Unten anklicken, um sie hinzuzufügen.</p>'}
+          </div>
+          <div class="ed-palette">${SEMIOTIC.map((sm) => `<button class="ed-pal" data-padd="${sm.id}" title="${sm.id}. ${esc(sm.name)} – ${esc(sm.de)}" ${pics.length >= MAX_PICTOS || pics.some((p) => p.id === sm.id) ? 'disabled' : ''}>${semioticSvg(sm.id, 38)}</button>`).join('')}</div>
+        </section>
+        <section class="ed-dcol wide">
+          <div class="ed-head">BESCHREIBUNG</div>
+          ${DESC_FIELDS.map(([k, label]) => field(k, label)).join('')}
+          <div class="ed-head">WAS FÜR GEGENSTÄNDE FINDET MAN</div>
+          <table class="ed-items">
+            <thead><tr><th>GEGENSTAND</th><th>ANZAHL</th><th>NOTIZ</th><th></th></tr></thead>
+            <tbody>${items.map((it, i) => `<tr>
+              <td><input type="text" data-item="${i}" data-f="name" value="${esc(it.name)}" list="eq-list"></td>
+              <td><input type="text" data-item="${i}" data-f="qty" value="${esc(it.qty)}" class="qty"></td>
+              <td><input type="text" data-item="${i}" data-f="note" value="${esc(it.note)}"></td>
+              <td><button class="danger" data-idel="${i}" title="Entfernen">✕</button></td></tr>`).join('')}
+            </tbody>
+          </table>
+          <div class="ed-additem">
+            <input type="text" id="eq-search" list="eq-list" placeholder="Gegenstand suchen oder frei eintippen …">
+            <input type="text" id="eq-qty" class="qty" placeholder="Anz.">
+            <button id="eq-add">HINZUFÜGEN</button>
+            <button id="eq-manage">AUSRÜSTUNGSLISTE BEARBEITEN</button>
+          </div>
+          <datalist id="eq-list">${equipmentList().map((it) => `<option value="${esc(it.name)}">${esc(it.cat)}</option>`).join('')}</datalist>
+          <p class="ed-note" id="eq-info"></p>
+        </section>
+      </div>
+    </div>`;
+  bindRoomFields(detail, room);
+  detail.querySelector('[data-close]').addEventListener('click', closeDetail);
+  detail.querySelectorAll('[data-pmap]').forEach((c) => c.addEventListener('change', () => {
+    snapshot();
+    const p = pics.map((x, i) => (i === Number(c.dataset.pmap) ? { ...x, map: c.checked } : x));
+    patchRoom(room.id, { picto: p });
+    commit();
+  }));
+  detail.querySelectorAll('[data-pdel]').forEach((b) => b.addEventListener('click', () => {
+    snapshot();
+    patchRoom(room.id, { picto: pics.filter((_, i) => i !== Number(b.dataset.pdel)) });
+    commit();
+    renderDetail();
+  }));
+  detail.querySelectorAll('[data-padd]').forEach((b) => b.addEventListener('click', () => {
+    if (addPicto(room.id, Number(b.dataset.padd), !pics.some((p) => p.map))) renderDetail();
+  }));
+  detail.querySelectorAll('[data-item]').forEach((inp) => {
+    inp.addEventListener('focus', snapshot);
+    inp.addEventListener('input', () => {
+      const list = (layer.rooms[room.id]?.items || []).map((x) => ({ ...x }));
+      list[Number(inp.dataset.item)][inp.dataset.f] = inp.value;
+      patchRoom(room.id, { items: list });
+      commit();
+    });
+  });
+  detail.querySelectorAll('[data-idel]').forEach((b) => b.addEventListener('click', () => {
+    snapshot();
+    patchRoom(room.id, { items: items.filter((_, i) => i !== Number(b.dataset.idel)) });
+    commit();
+    renderDetail();
+  }));
+  const search = detail.querySelector('#eq-search');
+  const showInfo = () => {
+    const it = equipmentList().find((x) => x.name.toLowerCase() === search.value.trim().toLowerCase());
+    detail.querySelector('#eq-info').textContent = it ? `${it.cat}${it.weight ? ` · Gewicht ${it.weight}` : ''}${it.cost ? ` · ${it.cost}` : ''}${it.effect ? ` · ${it.effect}` : ''}` : '';
+  };
+  search.addEventListener('input', showInfo);
+  const add = () => {
+    const name = search.value.trim();
+    if (!name) return;
+    snapshot();
+    patchRoom(room.id, { items: [...items, { name, qty: detail.querySelector('#eq-qty').value.trim() || '1', note: '' }] });
+    commit();
+    renderDetail();
+    detail.querySelector('#eq-search').focus();
+  };
+  detail.querySelector('#eq-add').addEventListener('click', add);
+  search.addEventListener('keydown', (e) => { if (e.key === 'Enter') add(); });
+  detail.querySelector('#eq-manage').addEventListener('click', openEquip);
+}
+
+// ---------- Ausrüstungsliste bearbeiten ----------
+
+const equip = $('#equip');
+let equipEdit = null;
+
+function openEquip() { equip.hidden = false; equipEdit = null; renderEquip(''); }
+function closeEquip() { equip.hidden = true; if (detailRoom) renderDetail(); }
+
+function renderEquip(filter) {
+  const q = filter.trim().toLowerCase();
+  const list = equipmentList().filter((it) => !q || `${it.name} ${it.cat} ${it.effect}`.toLowerCase().includes(q));
+  const e = equipEdit || { id: '', name: '', cat: 'Other Equipment', weight: '', cost: '', effect: '' };
+  equip.innerHTML = `
+    <div class="ed-dwin">
+      <header class="ed-dhead"><div><span class="dim">EDITOR</span><h2>AUSRÜSTUNGSLISTE</h2></div><button data-close>FERTIG ✕</button></header>
+      <div class="ed-dbody">
+        <section class="ed-dcol">
+          <div class="ed-head">${e.id ? 'EINTRAG BEARBEITEN' : 'NEUER EINTRAG'}</div>
+          <label class="ed-field">NAME <input type="text" id="q-name" value="${esc(e.name)}"></label>
+          <label class="ed-field">KATEGORIE <input type="text" id="q-cat" value="${esc(e.cat)}" list="q-cats"></label>
+          <datalist id="q-cats">${equipmentCategories().map((c) => `<option value="${esc(c)}">`).join('')}</datalist>
+          <label class="ed-field">GEWICHT <input type="text" id="q-weight" value="${esc(e.weight)}"></label>
+          <label class="ed-field">KOSTEN <input type="text" id="q-cost" value="${esc(e.cost)}"></label>
+          <label class="ed-field">EFFEKT / NOTIZ <textarea id="q-effect">${esc(e.effect)}</textarea></label>
+          <div class="ed-btns">
+            <button id="q-save">SPEICHERN</button>
+            ${e.id ? '<button id="q-new">NEUER EINTRAG</button><button class="danger" id="q-del">LÖSCHEN</button>' : ''}
+          </div>
+          <p class="ed-note">Einträge aus dem Katalog lassen sich ändern oder ausblenden. Eigene Einträge werden mit exportiert.</p>
+        </section>
+        <section class="ed-dcol wide">
+          <input type="text" id="q-filter" class="ed-search" placeholder="Suchen …" value="${esc(filter)}">
+          <table class="ed-items eq">
+            <thead><tr><th>NAME</th><th>KATEGORIE</th><th>GEWICHT</th><th>KOSTEN</th></tr></thead>
+            <tbody>${list.map((it) => `<tr data-eq="${esc(it.id)}" class="${equipEdit?.id === it.id ? 'on' : ''}"><td>${esc(it.name)}${it.base ? '' : ' <span class="dim">(eigen)</span>'}</td><td>${esc(it.cat)}</td><td>${esc(it.weight)}</td><td>${esc(it.cost)}</td></tr>`).join('')}</tbody>
+          </table>
+        </section>
+      </div>
+    </div>`;
+  equip.querySelector('[data-close]').addEventListener('click', closeEquip);
+  const f = equip.querySelector('#q-filter');
+  f.addEventListener('input', () => { renderEquip(f.value); const n = equip.querySelector('#q-filter'); n.focus(); n.setSelectionRange(n.value.length, n.value.length); });
+  equip.querySelectorAll('[data-eq]').forEach((tr) => tr.addEventListener('click', () => {
+    equipEdit = equipmentList().find((x) => x.id === tr.dataset.eq);
+    renderEquip(f.value);
+  }));
+  equip.querySelector('#q-save').addEventListener('click', () => {
+    const id = saveItem({
+      id: e.id, name: equip.querySelector('#q-name').value, cat: equip.querySelector('#q-cat').value,
+      weight: equip.querySelector('#q-weight').value, cost: equip.querySelector('#q-cost').value, effect: equip.querySelector('#q-effect').value,
+    });
+    if (!id) { toast('BITTE EINEN NAMEN EINTRAGEN'); return; }
+    equipEdit = equipmentList().find((x) => x.id === id) || null;
+    toast('GESPEICHERT');
+    renderEquip(f.value);
+  });
+  equip.querySelector('#q-new')?.addEventListener('click', () => { equipEdit = null; renderEquip(f.value); });
+  equip.querySelector('#q-del')?.addEventListener('click', () => {
+    if (!confirm(`„${e.name}“ aus der Liste entfernen?`)) return;
+    deleteItem(e.id);
+    equipEdit = null;
+    renderEquip(f.value);
+  });
 }
 
 function startPan(e, clickSelectsRoom = false) {
@@ -461,12 +726,90 @@ function onUp(e) {
 // ---------- Export / Import ----------
 
 function exportLayer() {
-  const blob = new Blob([JSON.stringify({ format: 'apollo-map-layer', level: LV.id, version: 2, layer }, null, 2)], { type: 'application/json' });
+  download(new Blob([JSON.stringify({ format: 'apollo-map-layer', level: LV.id, version: 3, layer, equipment: exportEquipment() }, null, 2)], { type: 'application/json' }), `apollo-${LV.id}-karte.json`);
+}
+
+function download(blob, name) {
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
-  a.download = `apollo-${LV.id}-karte.json`;
+  a.download = name;
   a.click();
-  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  setTimeout(() => URL.revokeObjectURL(a.href), 1500);
+}
+
+// ---------- Raumliste (PDF über Druckansicht, ODT als Datei) ----------
+
+function roomEntries() {
+  return level.rooms.map((room) => {
+    const d = layer.rooms[room.id] || {};
+    const doors = roomDoors(layer, room);
+    return {
+      room, d,
+      code: roomCode(room, layer),
+      name: roomName(level, room, layer),
+      zone: roomZone(level, room, layer),
+      doors: doors.length ? `${doors.length} (${['green', 'orange', 'red'].map((k) => { const n = doors.filter((x) => (x.sec || 'green') === k).length; return n ? `${n}× ${SECURITY[k].label}` : ''; }).filter(Boolean).join(', ')})` : '0',
+      cams: roomCams(layer, room).length,
+    };
+  }).sort((a, b) => a.zone.localeCompare(b.zone) || a.code.localeCompare(b.code, 'de', { numeric: true }));
+}
+
+const DESC_LABELS = {
+  aesthetic: 'Allgemeine Ästhetik & Designprinzipien',
+  smell: 'Was riecht man',
+  sight: 'Was sieht man',
+  sound: 'Was hört man',
+  investigate: 'Was erfährt man nach genauerer Untersuchung',
+};
+
+function roomListBlocks() {
+  const blocks = [{ h: 1, text: `${CONFIG.station} – Raumliste ${level.name}` },
+    { p: `${CONFIG.company} · ${CONFIG.moon} · ${CONFIG.planet} · ${CONFIG.star} · ${CONFIG.sector}` }];
+  let zone = null;
+  for (const e of roomEntries()) {
+    if (e.zone !== zone) { zone = e.zone; blocks.push({ h: 2, text: zone }); }
+    blocks.push({ h: 3, text: `${e.code} – ${e.name}` });
+    blocks.push({ kv: ['Status', STATUS[e.d.status || '']] });
+    blocks.push({ kv: ['Türen', e.doors] });
+    blocks.push({ kv: ['Kameras', String(e.cams)] });
+    if (e.d.picto?.length) blocks.push({ kv: ['Piktogramme', e.d.picto.map((p) => `${semioticById(p.id)?.name}${p.map ? ' (Karte)' : ''}`).join(', ')] });
+    if (e.d.info) blocks.push({ kv: ['Notiz (Terminal)', e.d.info] });
+    for (const [k, label] of DESC_FIELDS) if (e.d[k]) blocks.push({ kv: [DESC_LABELS[k] || label, e.d[k]] });
+    if (e.d.items?.length) {
+      blocks.push({ p: 'Gegenstände:', bold: true });
+      blocks.push({ list: e.d.items.map((it) => `${it.qty ? `${it.qty}× ` : ''}${it.name}${it.note ? ` – ${it.note}` : ''}`) });
+    }
+  }
+  blocks.push({ h: 2, text: 'AUFZÜGE' });
+  for (const l of level.lifts) {
+    const d = liftData(l, layer);
+    blocks.push({ h: 3, text: `Aufzug ${d.letter || l.id}` });
+    blocks.push({ kv: ['Sicherheitsstufe', d.sec ? SECURITY[d.sec].label : '–'] });
+    if (d.access) blocks.push({ kv: ['Zugang zu', d.access] });
+  }
+  return blocks;
+}
+
+function exportOdt() {
+  download(makeOdt(roomListBlocks()), `${CONFIG.stationCode}-${LV.id}-raumliste.odt`);
+}
+
+function exportPdf() {
+  const e = (t) => esc(t).replace(/\n/g, '<br>');
+  const html = roomListBlocks().map((b) => {
+    if (b.h) return `<h${b.h}>${e(b.text)}</h${b.h}>`;
+    if (b.kv) return `<p><b>${e(b.kv[0])}:</b> ${e(b.kv[1])}</p>`;
+    if (b.list) return `<ul>${b.list.map((t) => `<li>${e(t)}</li>`).join('')}</ul>`;
+    return `<p${b.bold ? ' class="b"' : ''}>${e(b.p)}</p>`;
+  }).join('');
+  const w = open('', '_blank');
+  if (!w) { toast('POPUP BLOCKIERT – BITTE POPUPS FÜR DIESE SEITE ERLAUBEN'); return; }
+  w.document.write(`<!doctype html><html lang="de"><head><meta charset="utf-8"><title>${esc(CONFIG.stationCode)} Raumliste</title>
+    <style>body{font:11pt/1.45 Arial,Helvetica,sans-serif;color:#111;margin:18mm}h1{font-size:20pt;margin:0 0 4mm}h2{font-size:14pt;border-bottom:1px solid #999;margin:8mm 0 3mm;page-break-after:avoid}
+    h3{font-size:11.5pt;margin:5mm 0 1.5mm;page-break-after:avoid}p{margin:0 0 1.5mm}ul{margin:0 0 2mm 5mm}.b{font-weight:bold}
+    @media print{body{margin:0}}</style></head><body>${html}
+    <script>setTimeout(()=>print(),300)<\/script></body></html>`);
+  w.document.close();
 }
 
 function importFile(file) {
@@ -476,6 +819,7 @@ function importFile(file) {
       const data = JSON.parse(reader.result);
       snapshot();
       layer = importLayer(data.layer || data);
+      if (data.equipment) importEquipment(data.equipment);
       st.sel = null;
       commit();
       renderProps();
@@ -496,6 +840,17 @@ function init() {
   document.querySelectorAll('.ed-tool').forEach((b) => b.addEventListener('click', () => setTool(b.dataset.tool)));
   document.querySelectorAll('#secs .ed-sec').forEach((b) => b.addEventListener('click', () => setSec(b.dataset.sec)));
 
+  $('#pictos').innerHTML = `<div class="ed-head">PIKTOGRAMM</div><div class="ed-palette">${SEMIOTIC.map((sm) => `<button class="ed-pal" data-pick="${sm.id}" title="${sm.id}. ${esc(sm.name)} – ${esc(sm.de)}">${semioticSvg(sm.id, 34)}</button>`).join('')}</div><p class="ed-note" id="pick-name"></p>`;
+  const pick = (id) => {
+    st.picto = id;
+    document.querySelectorAll('[data-pick]').forEach((b) => b.classList.toggle('on', Number(b.dataset.pick) === id));
+    const sm = semioticById(id);
+    $('#pick-name').textContent = `${sm.id}. ${sm.name} – ${sm.de}`;
+  };
+  document.querySelectorAll('[data-pick]').forEach((b) => b.addEventListener('click', () => { pick(Number(b.dataset.pick)); setTool('picto'); }));
+  pick(1);
+  $('#list-pdf').addEventListener('click', exportPdf);
+  $('#list-odt').addEventListener('click', exportOdt);
   $('#undo').addEventListener('click', undo);
   $('#redo').addEventListener('click', redo);
   $('#export').addEventListener('click', exportLayer);
@@ -527,7 +882,10 @@ function init() {
   addEventListener('resize', () => setVB({ ...st.vb, h: st.vb.w * (svg.clientHeight / svg.clientWidth) }));
 
   addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && !equip.hidden) { closeEquip(); return; }
+    if (e.key === 'Escape' && !detail.hidden) { closeDetail(); return; }
     if (e.target.closest('input, textarea, select')) return;
+    if (!detail.hidden || !equip.hidden) return;
     const k = e.key.toLowerCase();
     if ((e.ctrlKey || e.metaKey) && k === 'z') { e.preventDefault(); if (e.shiftKey) redo(); else undo(); return; }
     if ((e.ctrlKey || e.metaKey) && k === 'y') { e.preventDefault(); redo(); return; }

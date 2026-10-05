@@ -191,8 +191,48 @@ def cams_in(r):
 for r in rooms: r['cams']=cams_in(r)
 doors=[]
 for r in rooms: r['cams']=0
+
+# Wohnquartiere nach Vorgabe neu anlegen: Einzelquartier 1x1 (5x5 m), Familienquartier 2x1 (10x5 m)
+rooms=[r for r in rooms if r['zone']!='wohn']
+U=100
+def quarters(letter, rows):
+    n=0; out=[]
+    for y0,x0,kinds in rows:
+        x=x0
+        for k in kinds:
+            w=2*U if k=='F' else U
+            n+=1
+            out.append(dict(zone='wohn', label='', unit=f"{letter.upper()}{n}", kind='family' if k=='F' else 'single',
+                            rects=[[x,y0,x+w,y0+U]], lines=[], id=f"WOHN-{letter.upper()}{n}", cams=0))
+            x+=w
+    return out
+rooms+=quarters('d',[(300,1525,'FFFS'),(425,1625,'FFF')])
+rooms+=quarters('e',[(550,1525,'FFFS'),(700,1625,'FFF')])
+rooms+=quarters('a',[(300,2850,'SSSSS'),(425,2825,'SSSSS')])
+rooms+=quarters('b',[(550,2825,'SSSSS'),(700,2825,'SSSSS')])
+
+# Marshal: keine Beschriftung für das Quartier
+for r in rooms:
+    if r['id']=='MARSHAL-Q': r['label']=''
+labels=[l for l in labels if l['text']!='MARSHAL']
+
+# Aufzüge einheitlich 100x50 (Kabine + Leitergang), Mainframe-Aufzug bleibt klein
+for l in lifts:
+    if l['id']=='MF': continue
+    x0,y0,x1,y1=l['rect']
+    if l['dark'] in ('dl','dr'):
+        if x1-x0>100:
+            if l['dark']=='dl': x1=x0+100
+            else: x0=x1-100
+        y1=y0+50
+    else:
+        if y1-y0>100:
+            if l['dark']=='dt': y1=y0+100
+            else: y0=y1-100
+        x1=x0+50
+    l['rect']=[x0,y0,x1,y1]
 out=dict(name='LEVEL 0',bounds=[min(xs),min(ys),max(xs),max(ys)],zones=ZN,
-         rooms=[dict(id=r['id'],zone=r['zone'],label=r['label'] or r.get('unit',''),unit=r.get('unit',''),rects=r['rects'],lines=r['lines']) for r in rooms],
+         rooms=[dict(id=r['id'],zone=r['zone'],label=r['label'],unit=r.get('unit',''),kind=r.get('kind',''),rects=r['rects'],lines=r['lines']) for r in rooms],
          corridors=corr,lifts=lifts,doors=doors,labels=labels)
 js="// Stationsplan Level 0, digitalisiert aus der handgezeichneten Karte.\n// Einheiten: ≈ 20 pro Meter. Nur Grundriss (Räume, Gänge, Aufzüge) – Türen, Trennlinien,\n// Kameras und Raumnamen kommen aus dem Karten-Editor. Erzeugt per Skript (tools/level0).\nexport const LEVEL0 = "+json.dumps(out,ensure_ascii=False,separators=(',',':'))+";\n"
 open('level0.js','w').write(js)

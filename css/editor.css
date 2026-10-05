@@ -70,3 +70,44 @@ line.ed-sel { stroke: var(--yellow); }
 .editor .ly-cam, .editor .ly-door, .editor .ly-hit { cursor: pointer; }
 .editor .st-room.sel .st-wall { stroke: var(--yellow); stroke-width: 3; }
 .editor .st-room.sel .st-fill { fill: #2a2110; }
+
+/* Piktogramme */
+.ed-palette { display: grid; grid-template-columns: repeat(auto-fill, minmax(44px, 1fr)); gap: 5px; margin: 6px 0 10px; }
+.ed-pal { padding: 2px !important; border-width: 2px !important; line-height: 0; background: transparent; }
+.ed-pal.on { outline: 3px solid var(--yellow); outline-offset: 1px; }
+.ed-pal:disabled { opacity: .25; }
+.ed-pal:hover { background: transparent !important; outline: 2px solid var(--amber); }
+.ed-pics { display: flex; gap: 6px; flex-wrap: wrap; }
+.ed-pic { line-height: 0; opacity: .55; }
+.ed-pic.on-map { opacity: 1; outline: 2px solid var(--yellow); outline-offset: 1px; }
+
+/* Fenster: Raumbeschreibung, Ausrüstungsliste */
+.ed-overlay { position: fixed; inset: 0; z-index: 50; background: rgba(5, 2, 1, .82); display: flex; align-items: stretch; justify-content: center; padding: 26px; }
+.ed-dwin { background: var(--bg); border: 3px solid var(--amber); width: min(1400px, 100%); display: flex; flex-direction: column; min-height: 0; }
+.ed-dhead { display: flex; justify-content: space-between; align-items: center; padding: 12px 18px; border-bottom: 3px solid var(--amber); }
+.ed-dhead h2 { margin: 2px 0 0; color: var(--yellow); font-size: 22px; letter-spacing: .06em; }
+.ed-dbody { display: grid; grid-template-columns: 420px 1fr; gap: 0; min-height: 0; flex: 1; }
+.ed-dcol { padding: 14px 18px; overflow-y: auto; min-height: 0; }
+.ed-dcol + .ed-dcol { border-left: 3px solid var(--amber); }
+.ed-dcol .ed-head { margin-top: 14px; }
+.ed-dcol .ed-head:first-child { margin-top: 0; }
+.ed-dpics { display: grid; gap: 8px; margin-bottom: 8px; }
+.ed-dpic { display: grid; grid-template-columns: 58px 1fr auto; gap: 10px; align-items: center; border-bottom: 1px solid var(--rust); padding-bottom: 6px; font-size: 12px; }
+.ed-dpic svg { display: block; }
+.ed-dpic .ed-check { margin: 6px 0 0; }
+.ed-items { width: 100%; border-collapse: collapse; margin: 6px 0; }
+.ed-items th { text-align: left; font-size: 11px; color: var(--amber-dim); padding: 4px 6px; border-bottom: 2px solid var(--rust-2); }
+.ed-items td { padding: 3px 4px; border-bottom: 1px solid var(--rust); }
+.ed-items input, .ed-additem input, .ed-search {
+  width: 100%; background: #120905; color: var(--amber); border: 2px solid var(--amber-dim); font: 500 13px var(--font); padding: 5px 7px; user-select: text;
+}
+.ed-items input:focus, .ed-additem input:focus, .ed-search:focus { outline: none; border-color: var(--yellow); }
+.ed-items .qty, .ed-additem .qty { width: 70px; }
+.ed-items.eq tbody tr { cursor: pointer; }
+.ed-items.eq tbody tr:hover, .ed-items.eq tbody tr.on { background: #2a1408; color: var(--yellow); }
+.ed-items.eq td { font-size: 13px; padding: 5px 6px; }
+.ed-additem { display: flex; gap: 6px; margin-top: 8px; flex-wrap: wrap; }
+.ed-additem #eq-search { flex: 1; min-width: 220px; }
+.ed-search { margin-bottom: 10px; }
+.ed-dcol textarea { min-height: 70px; }
+.editor .st-lift.ed-sel .st-car { stroke: var(--yellow); stroke-width: 4; }

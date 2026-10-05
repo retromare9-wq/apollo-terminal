@@ -4,7 +4,8 @@
 
 import { el, txt, rng } from './svg.js';
 import { drawStarmap, SOL } from './starmap.js';
-import { drawStationPlan, roomName, frame } from './stationplan.js';
+import { drawStationPlan, roomName, roomCode, roomZone, frame } from './stationplan.js';
+import { semioticSvg } from './semiotic.js';
 import { loadLayer, roomDoors, roomCams, SECURITY } from './layer.js';
 
 export const W = 1000;
@@ -350,7 +351,7 @@ export class MapView {
     const q = norm(query);
     if (!q) return -1;
     const level = this.info.plan.level;
-    return this.rooms().findIndex((r) => norm(r.id) === q || norm(roomName(level, r, this.info.plan.layer)) === q
+    return this.rooms().findIndex((r) => norm(r.id) === q || norm(roomCode(r, this.info.plan.layer)) === q || norm(roomName(level, r, this.info.plan.layer)) === q
       || norm(r.id.replace('-', ' ')) === q || (r.unit && norm(r.unit) === q));
   }
 
@@ -396,12 +397,13 @@ export class MapView {
     this.panel.innerHTML = `
       <div class="sp-head">RAUMDATEN</div>
       <div class="sp-title">${esc(roomName(level, room, layer))}</div>
-      <div class="sp-row"><span class="dim">ID</span><span>${room.id}</span></div>
-      <div class="sp-row"><span class="dim">BEREICH</span><span>${level.zones[room.zone] || room.zone}</span></div>
+      <div class="sp-row"><span class="dim">ID</span><span>${esc(roomCode(room, layer))}</span></div>
+      <div class="sp-row"><span class="dim">BEREICH</span><span>${esc(roomZone(level, room, layer))}</span></div>
       <div class="sp-row"><span class="dim">EBENE</span><span>${level.name}</span></div>
       <div class="sp-row"><span class="dim">ZUGÄNGE</span><span>${doors.length}${levels.length ? ` · ${levels.map((k) => `<span class="sec-t sec-${k}">${SECURITY[k].label}</span>`).join(' ')}` : ''}</span></div>
       <div class="sp-row"><span class="dim">STATUS</span><span>${st}</span></div>
       ${layer.settings.showCams ? `<div class="sp-row"><span class="dim">ÜBERWACHUNG</span><span>${cams ? `<span class="mint">KAMERA AKTIV${cams > 1 ? ` (${cams})` : ''}</span>` : 'KEINE KAMERA'}</span></div>` : ''}
+      ${data.picto?.length ? `<div class="sp-pics">${data.picto.map((p) => semioticSvg(p.id, 38)).join('')}</div>` : ''}
       ${data.info ? `<div class="sp-note">${esc(data.info)}</div>` : ''}
       <div class="sp-key">←→ RAUM · ↑ ÜBERSICHT</div>`;
     this.panel.hidden = false;

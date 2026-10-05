@@ -487,6 +487,12 @@ function onKey(e) {
   if (!state.ready) return;
   if (e.key === 'F9') { e.preventDefault(); sound.toggle(); updateFlags(); return; }
   if (e.key === 'F10') { e.preventDefault(); document.body.classList.toggle('crt'); return; }
+  if (e.key === 'F8') {
+    e.preventDefault();
+    const on = document.body.classList.toggle('retro');
+    try { localStorage.setItem('apollo.retro', on ? '1' : ''); } catch { /* egal */ }
+    return;
+  }
   if (e.ctrlKey || e.metaKey || e.altKey) return;
   if (state.busy) { e.preventDefault(); return; }
   if (state.view === 'map' && state.map?.animating && e.key !== 'Escape') {
@@ -536,6 +542,7 @@ addEventListener('storage', (e) => {
 });
 
 async function main() {
+  try { if (localStorage.getItem('apollo.retro')) document.body.classList.add('retro'); } catch { /* egal */ }
   fit();
   addEventListener('resize', fit);
   addEventListener('keydown', onKey);
