@@ -12,6 +12,8 @@ for k,(ox,oy) in OFF.items():
     out['dots']+= [[x+ox,y+oy] for x,y in d['dots']]
     out['labels']+= [dict(text=t,x=x+ox,y=y+oy) for t,x,y in d['labels']]
 json.dump(out,open('level0_px.json','w'))
+import os, sys
+if not os.path.exists('rot.jpg'): sys.exit()  # Kontrollbild nur mit dem Originalfoto
 from PIL import Image, ImageDraw
 im=Image.open('rot.jpg').convert('RGB'); d=ImageDraw.Draw(im)
 for r in out['corr']: d.rectangle(r, outline=(255,0,255), width=4)

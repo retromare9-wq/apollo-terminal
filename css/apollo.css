@@ -308,6 +308,7 @@ body.crt .crt-overlay::after {
 .st-liftid { fill: var(--yellow); font-weight: 700; font-size: min(calc(var(--k, 1) * 15px), 40px); }
 .st-num { fill: var(--amber); font-weight: 700; font-size: min(calc(var(--k, 1) * 10px), 20px); }
 .st-name { fill: var(--amber); font-weight: 700; font-size: min(calc(var(--k, 1) * 9px), 17px); }
+.st-rid { fill: var(--amber); font-weight: 700; letter-spacing: .02em; }
 .st-zone { fill: var(--amber); font-weight: 700; letter-spacing: .12em; font-size: min(calc(var(--k, 1) * 12px), 30px); }
 .st-row { fill: var(--amber-dim); font-weight: 700; font-size: min(calc(var(--k, 1) * 12px), 30px); }
 .st-level { fill: var(--yellow); font-weight: 700; letter-spacing: .2em; font-size: min(calc(var(--k, 1) * 16px), 46px); }

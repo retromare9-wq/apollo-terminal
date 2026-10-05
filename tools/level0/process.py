@@ -4,7 +4,7 @@ d=json.load(open('level0_px.json'))
 sn=lambda v: int(round(v/S)*S)
 snr=lambda r:[sn(r[0]),sn(r[1]),sn(r[2]),sn(r[3])]
 
-ZN={'kantine':'KANTINE','med':'KRANKENSTATION','wohn':'WOHNBEREICHE','lager':'LAGERRÄUME','zivil':'ZIVILRÄUME','admin':'ADMINISTRATION',
+ZN={'eingang':'EINGANG','kantine':'KANTINE','med':'KRANKENSTATION','wohn':'WOHNBEREICHE','lager':'LAGERRÄUME','zivil':'ZIVILRÄUME','admin':'ADMINISTRATION',
     'xeno':'XENOBIOLOGIE','oneiro':'ONEIROLOGIE','klima':'KLIMATOLOGIE','marshal':'MARSHAL','fe':'F&E ADMIN','geo':'GEOLOGIE','tech':'TECHNIK & SYSTEME'}
 
 corr=[snr(r) for r in d['corr']]
@@ -242,10 +242,22 @@ for l in lifts:
             else: y0=y1-100
         x1=x0+50
     l['rect']=[x0,y0,x1,y1]
+# Eingangsbereich: Schleuse 1 (ganz rechts) – kurzer Gang – Schleusen 2 und 3 übereinander –
+# kurzer Gang – Empfang in der Nische gegenüber Aufzug A
+ENTRY_CORR=([3750,550,3800,600],[3650,500,3700,600],[3550,500,3600,600])
+corr=[c for c in corr if c not in ENTRY_CORR]
+for c in corr:
+    if c==[3600,525,3650,550]: c[0]=3625
+rooms+=[
+    dict(id='EINGANG-S1',zone='eingang',label='',name='SCHLEUSE 1',rects=[[3750,550,3800,600]],lines=[]),
+    dict(id='EINGANG-S2',zone='eingang',label='',name='SCHLEUSE 2',rects=[[3650,500,3700,550]],lines=[]),
+    dict(id='EINGANG-S3',zone='eingang',label='',name='SCHLEUSE 3',rects=[[3650,550,3700,600]],lines=[]),
+    dict(id='EINGANG-E',zone='eingang',label='',name='EMPFANG',rects=[[3575,500,3625,600]],lines=[]),
+]
 out=dict(name='LEVEL 0',bounds=[min(xs),min(ys),max(xs),max(ys)],zones=ZN,
-         rooms=[dict(id=r['id'],zone=r['zone'],label=r['label'],unit=r.get('unit',''),kind=r.get('kind',''),rects=r['rects'],lines=r['lines']) for r in rooms],
+         rooms=[dict(id=r['id'],zone=r['zone'],label=r['label'],unit=r.get('unit',''),kind=r.get('kind',''),**({'name':r['name']} if r.get('name') else {}),rects=r['rects'],lines=r['lines']) for r in rooms],
          corridors=corr,lifts=lifts,doors=doors,labels=labels)
 js="// Stationsplan Level 0, digitalisiert aus der handgezeichneten Karte.\n// Einheiten: ≈ 20 pro Meter. Nur Grundriss (Räume, Gänge, Aufzüge) – Türen, Trennlinien,\n// Kameras und Raumnamen kommen aus dem Karten-Editor. Erzeugt per Skript (tools/level0).\nexport const LEVEL0 = "+json.dumps(out,ensure_ascii=False,separators=(',',':'))+";\n"
 open('level0.js','w').write(js)
-print(len(rooms),'rooms',len(corr),'corr',len([x for x in doors if x['type']=='room']),'room doors', sum(1 for r in rooms if count[r['id']]==0),'rooms w/o door')
-print([r['id'] for r in rooms if count[r['id']]==0][:40])
+print(len(rooms),'rooms',len(corr),'corr',len([x for x in doors if x['type']=='room']),'room doors', sum(1 for r in rooms if count.get(r['id'],0)==0),'rooms w/o door')
+print([r['id'] for r in rooms if count.get(r['id'],0)==0][:40])

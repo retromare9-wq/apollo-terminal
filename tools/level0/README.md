@@ -8,3 +8,6 @@ Pixelkoordinaten je Kachel auf dem gerade gedrehten Foto).
   in Einzelräume, setzt die Raumtüren automatisch und schreibt `level0.js`.
 
 Das Ergebnis liegt als `js/station-level0.js` im Projekt.
+
+Neu erzeugen: `python3 build.py && python3 process.py`, danach `level0.js` nach `js/station-level0.js` kopieren.
+Nachträgliche Korrekturen (z. B. Eingangsbereich mit Schleusen und Empfang) stehen am Ende von `process.py`.

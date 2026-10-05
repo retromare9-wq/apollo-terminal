@@ -984,7 +984,8 @@ function onKey(e) {
     state.map.panBy(d[0], d[1]);
     return;
   }
-  if (onPlan && !e.ctrlKey && !e.altKey && (e.key === '+' || e.key === '#' || e.key === '-')) {
+  // '-' zoomt nur bei leerer Eingabe, damit Raum-IDs wie XENO-2 tippbar bleiben
+  if (onPlan && !e.ctrlKey && !e.altKey && (e.key === '+' || e.key === '#' || (e.key === '-' && !state.buffer))) {
     e.preventDefault();
     state.map.zoomBy(e.key === '+' ? 0.75 : 1 / 0.75);
     sound.tick();

@@ -11,6 +11,7 @@ const ASPECT = 446 / 1000;
 export function roomName(level, room, layer) {
   const custom = layer?.rooms?.[room.id]?.name;
   if (custom) return custom.toUpperCase();
+  if (room.name) return room.name;
   if (room.unit) return `${room.kind === 'family' ? 'FAMILIENQUARTIER' : 'EINZELQUARTIER'} ${room.unit}`;
   const zone = level.zones[room.zone] || room.zone.toUpperCase();
   if (room.label) return `${zone} ${room.label}`;
@@ -18,6 +19,13 @@ export function roomName(level, room, layer) {
 }
 
 export const roomCode = (room, layer) => layer?.rooms?.[room.id]?.code || room.id;
+// Position der Raum-ID: gespeichert oder oben links im Raum
+export function roomIdPos(room, layer) {
+  const p = layer?.rooms?.[room.id]?.idPos;
+  if (p) return p;
+  const b = bbox(room.rects);
+  return { x: b[0] + 6, y: b[1] + 6 };
+}
 export const roomZone = (level, room, layer) => layer?.rooms?.[room.id]?.zoneName || level.zones[room.zone] || room.zone.toUpperCase();
 export const liftData = (l, layer) => ({ letter: l.id === 'MF' ? '' : l.id, sec: '', access: '', ...(layer?.lifts?.[l.id] || {}) });
 
@@ -71,7 +79,8 @@ function lift(g, l, layer) {
 
 // Bereichsüberschriften: Vorgabe aus dem Grundriss, überschrieben/ergänzt durch den Editor
 export function planLabels(level, layer) {
-  const exit = level.corridors.reduce((m, c) => (c[2] > m[2] ? c : m));
+  const all = [...level.corridors, ...level.rooms.flatMap((r) => r.rects)];
+  const exit = all.reduce((m, c) => (c[2] > m[2] ? c : m));
   const base = [
     ...level.labels.map((l, i) => ({ id: `lbl${i}`, text: l.text, x: l.x, y: l.y })),
     { id: 'lbl-exit', text: 'ZUM FLUGFELD ▶', x: exit[2] + 30, y: (exit[1] + exit[3]) / 2 },
@@ -116,11 +125,13 @@ export function drawStationPlan(g, cfg, level, layer, opts = {}) {
   level.rooms.forEach((room) => {
     const b = bbox(room.rects);
     const status = statusOf(room.id);
-    const custom = layer.rooms[room.id]?.name;
-    const label = custom || room.label;
-    if (label) {
-      const big = label.length > 3;
-      txt(labelLayer, b[0] + 8, b[1] + 8, label.toUpperCase(), `${big ? 'st-name' : 'st-num'} rlbl`, { 'dominant-baseline': 'hanging' });
+    // Raum-ID auf der Karte (Häkchen im Editor), Position im Raum verschiebbar
+    const rd = layer.rooms[room.id];
+    if (rd?.showId) {
+      const p = roomIdPos(room, layer);
+      const b0 = bbox(room.rects);
+      const max = Math.max(8, Math.min(18, Math.min(b0[2] - b0[0], b0[3] - b0[1]) * 0.4));
+      txt(labelLayer, p.x, p.y, roomCode(room, layer).toUpperCase(), 'st-rid rlbl', { 'dominant-baseline': 'hanging', 'data-oid': room.id, 'data-kind': 'rid', style: `font-size: min(calc(var(--k, 1) * 10px), ${max.toFixed(1)}px)` });
     }
     const pics = (layer.rooms[room.id]?.picto || []).filter((p) => p.map).slice(0, 5);
     if (pics.length) {

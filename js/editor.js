@@ -1,10 +1,10 @@
 // Karten-Editor: Türen, Trennlinien, Kameras und Raumdaten auf einem Stationsplan eintragen.
 import { CONFIG, STATION } from './data.js';
 import { el } from './svg.js';
-import { drawStationPlan, roomName, roomCode, roomZone, liftData, applyZoom, planLabels } from './stationplan.js';
+import { drawStationPlan, roomName, roomCode, roomZone, liftData, applyZoom, planLabels, roomIdPos, bbox } from './stationplan.js';
 import {
   CAM, SECURITY, STATUS, UNITS_PER_M, DESC_FIELDS, MAX_PICTOS, loadLayer, saveLayer, emptyLayer, importLayer,
-  snapDoor, roomAt, containerRects, camHandle, roomDoors, roomCams,
+  snapDoor, roomAt, containerRects, camHandle, roomDoors, roomCams, inRect,
 } from './layer.js';
 import { SEMIOTIC, semioticSvg, semioticById } from './semiotic.js';
 import { equipmentList, equipmentCategories, saveItem, deleteItem, exportEquipment, importEquipment } from './equipment.js';
@@ -306,7 +306,7 @@ function renderProps() {
       <h3>${esc(roomName(level, room, layer))}</h3>
       <div class="ed-row"><span class="dim">TÜREN</span><span>${doors.length}</span></div>
       <div class="ed-row"><span class="dim">KAMERAS</span><span>${roomCams(layer, room).length}</span></div>
-      <label class="ed-field">RAUM-ID <input type="text" data-k="code" maxlength="20" value="${esc(data.code)}" placeholder="${esc(room.id)}"></label>
+      <div class="ed-crow ed-idrow"><label class="ed-field">RAUM-ID <input type="text" data-k="code" maxlength="20" value="${esc(data.code)}" placeholder="${esc(room.id)}"></label><label class="ed-field ed-checkf" title="Raum-ID auf der Karte anzeigen (im Raum verschiebbar)"><input type="checkbox" data-showid ${data.showId ? 'checked' : ''}> AUF KARTE</label></div>
       <label class="ed-field">NAME <input type="text" data-k="name" maxlength="40" value="${esc(data.name)}" placeholder="${esc(roomName(level, room, { rooms: {} }))}"></label>
       <label class="ed-field">BEREICH <input type="text" data-k="zoneName" maxlength="40" value="${esc(data.zoneName)}" placeholder="${esc(level.zones[room.zone] || room.zone)}"></label>
       <label class="ed-field">STATUS <select data-k="status">${Object.entries(STATUS).map(([k, v]) => `<option value="${k}" ${(data.status || '') === k ? 'selected' : ''}>${v}</option>`).join('')}</select></label>
@@ -350,6 +350,12 @@ function renderProps() {
 }
 
 function bindRoomFields(root, room) {
+  root.querySelectorAll('[data-showid]').forEach((cb) => cb.addEventListener('change', () => {
+    snapshot();
+    patchRoom(room.id, { showId: cb.checked || '' });
+    commit();
+    root.querySelectorAll('[data-showid]').forEach((o) => { o.checked = cb.checked; });
+  }));
   root.querySelectorAll('[data-k]').forEach((inp) => {
     inp.addEventListener('focus', snapshot);
     inp.addEventListener(inp.tagName === 'SELECT' ? 'change' : 'input', () => {
@@ -416,6 +422,13 @@ function onDown(e) {
 
   if (st.tool === 'select') {
     const obj = objectAt(e);
+    if (obj?.kind === 'rid') {
+      // Raum-ID: Raum wählen, Beschriftung innerhalb des Raums ziehen
+      select({ kind: 'room', id: obj.id });
+      st.drag = { type: 'rid', id: obj.id, start: pt, orig: roomIdPos(roomById(obj.id), layer), moved: false };
+      svg.setPointerCapture(e.pointerId);
+      return;
+    }
     if (obj) {
       select(obj);
       st.drag = { type: 'move', start: pt, orig: JSON.stringify(find(obj.kind, obj.id)), moved: false };
@@ -539,7 +552,7 @@ function renderDetail() {
       <div class="ed-dbody">
         <section class="ed-dcol">
           <div class="ed-head">RAUMDATEN</div>
-          <label class="ed-field">RAUM-ID <input type="text" data-k="code" maxlength="20" value="${esc(data.code)}" placeholder="${esc(room.id)}"></label>
+          <div class="ed-crow ed-idrow"><label class="ed-field">RAUM-ID <input type="text" data-k="code" maxlength="20" value="${esc(data.code)}" placeholder="${esc(room.id)}"></label><label class="ed-field ed-checkf" title="Raum-ID auf der Karte anzeigen (im Raum verschiebbar)"><input type="checkbox" data-showid ${data.showId ? 'checked' : ''}> AUF KARTE</label></div>
           <label class="ed-field">NAME <input type="text" data-k="name" maxlength="40" value="${esc(data.name)}" placeholder="${esc(roomName(level, room, { rooms: {} }))}"></label>
           <label class="ed-field">BEREICH <input type="text" data-k="zoneName" maxlength="40" value="${esc(data.zoneName)}" placeholder="${esc(level.zones[room.zone] || room.zone)}"></label>
           <label class="ed-field">STATUS <select data-k="status">${Object.entries(STATUS).map(([k, v]) => `<option value="${k}" ${(data.status || '') === k ? 'selected' : ''}>${v}</option>`).join('')}</select></label>
@@ -721,6 +734,19 @@ function onMove(e) {
     render();
     return;
   }
+  if (d.type === 'rid') {
+    if (!d.moved) {
+      if (Math.hypot(pt.x - d.start.x, pt.y - d.start.y) < 4) return;
+      d.moved = true;
+      snapshot();
+    }
+    const room = roomById(d.id);
+    const b = bbox(room.rects);
+    const x = Math.round(Math.min(b[2] - 8, Math.max(b[0], d.orig.x + pt.x - d.start.x)));
+    const y = Math.round(Math.min(b[3] - 8, Math.max(b[1], d.orig.y + pt.y - d.start.y)));
+    if (room.rects.some((r) => inRect(r, x + 2, y + 2))) { patchRoom(d.id, { idPos: { x, y } }); render(); }
+    return;
+  }
   if (d.type === 'move' && st.sel) {
     const obj = find(st.sel.kind, st.sel.id);
     const orig = JSON.parse(d.orig);
@@ -756,7 +782,7 @@ function onUp(e) {
     select(room ? { kind: 'room', id: room.id } : null);
     return;
   }
-  if (d.type === 'handle' || (d.type === 'move' && d.moved)) {
+  if (d.type === 'handle' || ((d.type === 'move' || d.type === 'rid') && d.moved)) {
     commit();
     renderProps();
   }
@@ -897,7 +923,7 @@ function initTabs() {
     document.querySelectorAll('.ed-tab').forEach((b) => b.classList.toggle('on', b.dataset.tab === k));
     document.body.classList.toggle('tab-content', k !== 'map');
     $('#content').hidden = k === 'map';
-    $('#ed-sub').textContent = k === 'map' ? `// ${CONFIG.stationCode} · ${level.name}` : '// TERMINAL-INHALTE';
+    $('#ed-sub').textContent = k === 'map' ? `// ${level.name}` : '// TERMINAL-INHALTE';
     if (k === 'map') { render(); renderProps(); } else contentEd.show(k);
     try { sessionStorage.setItem('apollo.editor.tab', k); } catch { /* egal */ }
   };
@@ -908,7 +934,7 @@ function initTabs() {
 }
 
 function init() {
-  $('#ed-sub').textContent = `// ${CONFIG.stationCode} · ${level.name}`;
+  $('#ed-sub').textContent = `// ${level.name}`;
   $('#tools').innerHTML = TOOLS.map((t) => `<button class="ed-tool" data-tool="${t.id}"><span class="k">${t.key}</span>${t.label}</button>`).join('');
   $('#secs').innerHTML = Object.entries(SECURITY).map(([k, v]) => `<button class="ed-sec" data-sec="${k}"><i style="background:var(--sec-${k})"></i>${v.label}</button>`).join('');
   document.querySelectorAll('.ed-tool').forEach((b) => b.addEventListener('click', () => setTool(b.dataset.tool)));

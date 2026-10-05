@@ -84,7 +84,7 @@ und Notiz eintragen.
 | 2 | Tür (in einen Gang oder an eine Raumwand klicken) |
 | 3 | Trennlinie (Anfang und Ende klicken) |
 | 4 | Kamera (gelben Punkt ziehen = Richtung und Reichweite) |
-| 5 | Raum: ID, Name, Bereich, Status, Notiz · „Raumbeschreibung öffnen“ für Ästhetik, Sinneseindrücke, Untersuchung, Gegenstände und Piktogramme |
+| 5 | Raum: ID (Häkchen „AUF KARTE“ zeigt sie im Plan, mit Werkzeug 1 im Raum verschiebbar), Name, Bereich, Status, Notiz · „Raumbeschreibung öffnen“ für Ästhetik, Sinneseindrücke, Untersuchung, Gegenstände und Piktogramme |
 | 6 | Radierer |
 | 7 | Piktogramm (Semiotic Standard, bis zu 5 pro Raum) |
 | 8 | Beschriftung setzen (vorhandene mit Werkzeug 1 anklicken, umbenennen, verschieben) |

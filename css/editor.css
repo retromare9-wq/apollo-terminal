@@ -165,3 +165,14 @@ body.tab-content .map-only, body.tab-content .ed-tools, body.tab-content .ed-can
 .ed-info .ed-block { border-color: var(--rust); }
 .ed-ihead { font-size: 11px; font-weight: 700; letter-spacing: .08em; color: var(--amber-dim); margin: 8px 0 6px; }
 .ed-note b { color: var(--amber); }
+
+.editor .st-rid { cursor: move; }
+.ed-idrow { align-items: flex-end !important; }
+.ed-idrow .ed-field { margin: 10px 0; }
+
+/* Kopfleiste kompakt, damit alles auf den Bildschirm passt */
+.ed-top { gap: 10px; padding: 0 12px; }
+.ed-title { font-size: 15px; letter-spacing: .06em; }
+.ed-actions { gap: 5px; }
+.ed-top .ed-actions button, .ed-top .ed-actions .btn { padding: 5px 7px; font-size: 11px; letter-spacing: .03em; }
+.ed-check { margin: 0 2px; font-size: 11px; }
