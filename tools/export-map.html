@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <title>Stationsplan Export</title>
-<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;700&family=VT323&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="../css/apollo.css">
 <style>
   html, body { overflow: visible; height: auto; background: #0a0604; }
@@ -50,11 +50,11 @@
     `${CONFIG.company} · ${CONFIG.moon} · ${CONFIG.planet} · ${CONFIG.star} · ${CONFIG.sector}${gm ? ' · SPIELLEITER-VERSION' : ''}`;
   const sw = (html) => `<svg width="70" height="34" viewBox="0 0 70 34">${html}</svg>`;
   document.getElementById('legend').innerHTML = [
-    [sw('<rect x="2" y="2" width="66" height="30" fill="#561a10"/>'), 'GANG'],
-    [sw('<rect x="2" y="2" width="66" height="30" fill="#140a05" stroke="#c8872a" stroke-width="3"/>'), 'RAUM'],
-    [sw('<rect x="2" y="2" width="66" height="30" fill="#561a10"/><rect x="30" y="2" width="9" height="30" fill="#2fbf3a"/>'), 'TÜR GRÜN'],
-    [sw('<rect x="2" y="2" width="66" height="30" fill="#561a10"/><rect x="30" y="2" width="9" height="30" fill="#e8912d"/>'), 'TÜR ORANGE'],
-    [sw('<rect x="2" y="2" width="66" height="30" fill="#561a10"/><rect x="30" y="2" width="9" height="30" fill="#e0442c"/>'), 'TÜR ROT'],
+    [sw('<rect x="2" y="2" width="66" height="30" fill="#7a2418"/>'), 'GANG'],
+    [sw('<rect x="2" y="2" width="66" height="30" fill="#3a2410" stroke="#d4702c" stroke-width="3"/>'), 'RAUM'],
+    [sw('<rect x="2" y="2" width="66" height="30" fill="#7a2418"/><rect x="30" y="2" width="9" height="30" fill="#2fbf3a"/>'), 'TÜR GRÜN'],
+    [sw('<rect x="2" y="2" width="66" height="30" fill="#7a2418"/><rect x="30" y="2" width="9" height="30" fill="#e8912d"/>'), 'TÜR ORANGE'],
+    [sw('<rect x="2" y="2" width="66" height="30" fill="#7a2418"/><rect x="30" y="2" width="9" height="30" fill="#e0442c"/>'), 'TÜR ROT'],
     [sw('<line x1="4" y1="17" x2="66" y2="17" stroke="#8d8680" stroke-width="2"/>'), 'TRENNLINIE'],
     [sw(`<g transform="translate(3 2) scale(.3)">${semioticById(32).svg}</g><g transform="translate(35 2) scale(.3)">${semioticById(28).svg}</g><rect x="2" y="1" width="66" height="32" fill="none" stroke="#3d63ff" stroke-width="2"/>`), 'AUFZUG + LEITERGANG'],
     ...(gm ? [[sw('<path d="M10 17 L60 2 A52 52 0 0 1 60 32 Z" fill="#6cc495" fill-opacity=".3"/><circle cx="10" cy="17" r="6" fill="#6cc495"/>'), 'KAMERA']] : []),

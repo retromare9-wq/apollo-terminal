@@ -16,16 +16,29 @@ Interaktives Stationsterminal **A.P.O.L.L.O.** für ALIEN RPG: Die Spieler stell
 | Esc | Zurück / Verbindung trennen |
 | ← → (Stationsplan) | Räume nacheinander auswählen |
 | Raum-ID + Enter (Stationsplan) | Direkt zum Raum, z. B. `XENO-2`; nur die Abteilung (z. B. `XENO`) springt zum ersten Raum dieser Abteilung |
-| Strg + Pfeiltasten (Stationsplan) | Karte bewegen |
-| + / # (Stationsplan) | Hinein- / herauszoomen |
-| F8 | Retro-Modus an/aus (Bitmap-Schrift, grobe Rasterzeilen) |
+| Strg + Pfeiltasten (alle Karten) | Karte bewegen |
+| + / # (alle Karten) | Hinein- / herauszoomen |
 | F9 | Ton an/aus |
 | F10 | Röhrenmonitor-Effekt an/aus |
 | F11 | Vollbild (Browser) |
 
 Während einer Karten-Animation überspringt jede Taste direkt zum Ziel.
 
-## Karten-Editor (Spielleitung)
+## Editor (Spielleitung)
+
+`editor.html` – über die Reiter in der Fußleiste:
+
+- **STATIONSPLAN**: Karten-Editor (siehe unten)
+- **ALLGEMEIN**: Namen von Computer, Station, Mond, Planet, Stern, Sektor; Begrüßung, Statusanzeige im Menü, Startsequenz, Interkom-Antworten
+- **STERNEN-/SYSTEM-/MONDKARTE**: alle Beschriftungen und Datenzeilen der Karten
+- **SCHADENSBERICHT**: Einleitung, Fälle, Hüllenintegrität, Empfehlung; Fälle mit Raum setzen den Raumstatus direkt im Stationsplan
+- **BERICHTE**: Titel, Schlüsselwörter und Inhalt aller Kategorien; neue Berichte anlegen
+- **MENÜ** und **PERSONAL**: Hauptmenü und Stationsbewohner
+
+Alle Texte werden im Browser gespeichert, das Terminal übernimmt sie sofort. **Exportieren**
+sichert Karte, Ausrüstung und Texte in einer Datei.
+
+### Stationsplan
 
 `editor.html` – Türen (Sicherheitsstufe Grün / Orange / Rot), graue Trennlinien, Kameras mit
 Sichtkegel (Richtung und Reichweite einstellbar, fester Öffnungswinkel) sowie Raumname, Status

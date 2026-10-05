@@ -1,7 +1,7 @@
 /* Karten-Editor (Spielleitung). Nutzt die Farben und Kartenstile aus apollo.css. */
 body.editor {
   height: 100vh; overflow: hidden; user-select: none;
-  display: grid; grid-template-columns: 230px 1fr 320px; grid-template-rows: 54px 1fr 30px;
+  display: grid; grid-template-columns: 230px 1fr 320px; grid-template-rows: 54px 1fr 36px;
   grid-template-areas: 'top top top' 'tools canvas props' 'status status status';
   background: var(--bg); color: var(--amber); font-family: var(--font); font-size: 14px;
 }
@@ -58,7 +58,9 @@ body.editor {
 .ed-btns { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 12px; }
 .ed-note { font-size: 12px; color: var(--amber-dim); line-height: 1.45; margin-top: 10px; }
 
-.ed-status { grid-area: status; border-top: 3px solid var(--amber); display: flex; justify-content: space-between; align-items: center; padding: 0 14px; font-size: 12px; font-weight: 500; }
+.ed-status { grid-area: status; border-top: 3px solid var(--amber); display: flex; align-items: stretch; gap: 0; padding: 0; overflow-x: auto; }
+.ed-tab { border: 0 !important; border-right: 2px solid var(--amber-dim) !important; padding: 0 16px !important; font-size: 12px !important; }
+.ed-tab.on { background: var(--yellow) !important; color: var(--ink) !important; }
 
 /* Auswahl und Hilfsgrafik in der Karte */
 .ed-sel { filter: drop-shadow(0 0 4px #fff) drop-shadow(0 0 8px var(--yellow)); }
@@ -69,7 +71,7 @@ line.ed-sel { stroke: var(--yellow); }
 .ed-snapdot { fill: var(--yellow); pointer-events: none; }
 .editor .ly-cam, .editor .ly-door, .editor .ly-hit { cursor: pointer; }
 .editor .st-room.sel .st-wall { stroke: var(--yellow); stroke-width: 3; }
-.editor .st-room.sel .st-fill { fill: #2a2110; }
+.editor .st-room.sel .st-fill { fill: #5a4512; }
 
 /* Piktogramme */
 .ed-palette { display: grid; grid-template-columns: repeat(auto-fill, minmax(44px, 1fr)); gap: 5px; margin: 6px 0 10px; }
@@ -114,3 +116,30 @@ line.ed-sel { stroke: var(--yellow); }
 
 .editor .lbl[data-oid] { cursor: move; }
 .editor text.ed-sel { fill: var(--yellow); }
+
+.map-only { display: contents; }
+body.tab-content .map-only, body.tab-content .ed-tools, body.tab-content .ed-canvas, body.tab-content .ed-props { display: none !important; }
+
+/* Inhalts-Editor */
+.ed-content { grid-area: 2 / 1 / 3 / 4; display: flex; flex-direction: column; min-height: 0; }
+.ed-cbar { display: flex; align-items: center; gap: 16px; padding: 10px 18px; border-bottom: 2px solid var(--rust-2); font-size: 12px; }
+.ed-cbar .danger { margin-left: auto; }
+.ed-ctitle { font-weight: 700; font-size: 16px; color: var(--yellow); letter-spacing: .08em; }
+.ed-cbody { flex: 1; overflow-y: auto; padding: 14px 18px 40px; }
+.ed-cgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 28px; max-width: 1500px; }
+.ed-cgrid.wide-right { grid-template-columns: 340px 1fr; }
+.ed-cone { max-width: 1300px; }
+.ed-crow { display: flex; gap: 8px; align-items: flex-end; }
+.ed-crow .ed-field { flex: 1; margin: 6px 0; }
+.ed-crow > button { margin-bottom: 6px; }
+.ed-crow input.key { width: 60px; }
+.ed-crow .ed-field:has(input.key) { flex: 0 0 70px; }
+.ed-cname { flex: 1; padding: 8px 0; font-weight: 700; }
+.ed-crow select:not(.ed-field select) { background: #120905; color: var(--amber); border: 2px solid var(--amber-dim); font: 500 13px var(--font); padding: 5px; }
+.ed-case, .ed-block, .ed-person { border: 2px solid var(--rust-2); padding: 6px 12px 8px; margin-bottom: 10px; }
+.ed-tlist { display: grid; gap: 5px; margin-bottom: 8px; }
+.ed-tsel { text-align: left; }
+.ed-tsel.on { background: var(--yellow) !important; color: var(--ink) !important; }
+.ed-checkf { display: flex !important; align-items: center; gap: 6px; flex: 0 0 auto !important; padding-bottom: 8px; }
+.ed-checkf input { accent-color: var(--mint); }
+.ed-content textarea { font: 500 13px/1.45 var(--font); }

@@ -9,6 +9,10 @@ import {
 import { SEMIOTIC, semioticSvg, semioticById } from './semiotic.js';
 import { equipmentList, equipmentCategories, saveItem, deleteItem, exportEquipment, importEquipment } from './equipment.js';
 import { makeOdt } from './odt.js';
+import { loadContent, currentContent, saveContent } from './content.js';
+import { createContentEditor, CONTENT_TABS } from './content-editor.js';
+
+loadContent();
 
 const LV = STATION.levels[0];
 const level = LV.plan;
@@ -378,7 +382,6 @@ function setTool(id) {
   st.lineStart = null;
   svg.classList.toggle('tool-select', id === 'select');
   document.querySelectorAll('.ed-tool').forEach((b) => b.classList.toggle('on', b.dataset.tool === id));
-  $('#hint').textContent = TOOLS.find((t) => t.id === id).hint;
   $('#pictos').hidden = id !== 'picto';
   drawUi();
   if (!st.sel) renderProps();
@@ -701,7 +704,6 @@ function startPan(e, clickSelectsRoom = false) {
 
 function onMove(e) {
   const pt = toMap(e);
-  $('#coords').textContent = `X ${m(pt.x)} M · Y ${m(pt.y)} M`;
   const d = st.drag;
   if (!d) { drawUi(pt); return; }
   if (d.type === 'pan') {
@@ -764,7 +766,7 @@ function onUp(e) {
 // ---------- Export / Import ----------
 
 function exportLayer() {
-  download(new Blob([JSON.stringify({ format: 'apollo-map-layer', level: LV.id, version: 3, layer, equipment: exportEquipment() }, null, 2)], { type: 'application/json' }), `apollo-${LV.id}-karte.json`);
+  download(new Blob([JSON.stringify({ format: 'apollo-map-layer', level: LV.id, version: 4, layer, equipment: exportEquipment(), content: currentContent() }, null, 2)], { type: 'application/json' }), `apollo-${LV.id}-karte.json`);
 }
 
 function download(blob, name) {
@@ -865,6 +867,7 @@ function importFile(file) {
       snapshot();
       layer = importLayer(data.layer || data);
       if (data.equipment) importEquipment(data.equipment);
+      if (data.content) { saveContent(data.content); contentEd?.refresh(); }
       st.sel = null;
       commit();
       renderProps();
@@ -877,6 +880,32 @@ function importFile(file) {
 }
 
 // ---------- Start ----------
+
+// ---------- Reiter: Stationsplan und Terminal-Inhalte ----------
+
+let contentEd = null;
+function initTabs() {
+  const tabs = [['map', 'STATIONSPLAN'], ...CONTENT_TABS];
+  $('#tabs').innerHTML = tabs.map(([k, t]) => `<button class="ed-tab" data-tab="${k}">${t}</button>`).join('');
+  contentEd = createContentEditor($('#content'), {
+    level,
+    getLayer: () => layer,
+    setRoomStatus: (id, status) => { snapshot(); patchRoom(id, { status }); commit(); },
+    toast,
+  });
+  const show = (k) => {
+    document.querySelectorAll('.ed-tab').forEach((b) => b.classList.toggle('on', b.dataset.tab === k));
+    document.body.classList.toggle('tab-content', k !== 'map');
+    $('#content').hidden = k === 'map';
+    $('#ed-sub').textContent = k === 'map' ? `// ${CONFIG.stationCode} · ${level.name}` : '// TERMINAL-INHALTE';
+    if (k === 'map') { render(); renderProps(); } else contentEd.show(k);
+    try { sessionStorage.setItem('apollo.editor.tab', k); } catch { /* egal */ }
+  };
+  document.querySelectorAll('.ed-tab').forEach((b) => b.addEventListener('click', () => show(b.dataset.tab)));
+  let start = 'map';
+  try { start = sessionStorage.getItem('apollo.editor.tab') || 'map'; } catch { /* egal */ }
+  show(tabs.some(([k]) => k === start) ? start : 'map');
+}
 
 function init() {
   $('#ed-sub').textContent = `// ${CONFIG.stationCode} · ${level.name}`;
@@ -931,6 +960,7 @@ function init() {
     if (e.key === 'Escape' && !detail.hidden) { closeDetail(); return; }
     if (e.target.closest('input, textarea, select')) return;
     if (!detail.hidden || !equip.hidden) return;
+    if (document.body.classList.contains('tab-content')) return;
     const k = e.key.toLowerCase();
     if ((e.ctrlKey || e.metaKey) && k === 'z') { e.preventDefault(); if (e.shiftKey) redo(); else undo(); return; }
     if ((e.ctrlKey || e.metaKey) && k === 'y') { e.preventDefault(); redo(); return; }
@@ -955,6 +985,7 @@ function init() {
   render();
   renderProps();
   updateButtons();
+  initTabs();
 }
 
 init();

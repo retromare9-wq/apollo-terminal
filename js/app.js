@@ -4,6 +4,11 @@ import { sound } from './sound.js';
 import { runBoot } from './boot.js';
 import { MapView, LEVELS } from './maps.js';
 import { wyLogo } from './logo.js';
+import { loadContent, CONTENT_KEY } from './content.js';
+import { loadLayer } from './layer.js';
+import { roomName } from './stationplan.js';
+
+loadContent();
 
 const $ = (s, root = document) => root.querySelector(s);
 const view = $('#view');
@@ -44,11 +49,15 @@ function setHint(text) { $('#f-hint').textContent = text; }
 
 function renderCmd() { $('#cmd').textContent = state.buffer; }
 
-function initChrome() {
-  $('#info-model').textContent = `${CONFIG.computer} ${CONFIG.model.replace(/^APOLLO\s*/, '')}`.trim();
-  $('#info-logo').innerHTML = wyLogo();
+function initChromeText() {
+  $('#info-model').textContent = `${CONFIG.computer} ${String(CONFIG.model).replace(/^APOLLO\s*/, '')}`.trim();
   $('#info-station').textContent = CONFIG.sector;
   $('#info-code').textContent = CONFIG.star;
+}
+
+function initChrome() {
+  $('#info-logo').innerHTML = wyLogo();
+  initChromeText();
 
   const t0 = Date.now();
   let lock = 14024;
@@ -180,6 +189,7 @@ function openTopic(topic) {
   else if (topic.view === 'map') showMap(topic);
   else if (topic.view === 'interkom') showInterkom();
   else if (topic.view === 'help') showHelp();
+  else if (topic.view === 'damage') showDamage(topic);
 }
 
 function blockHtml(b) {
@@ -217,6 +227,43 @@ function showReport(topic) {
       ${topic.blocks.map(blockHtml).join('')}
     </div>`;
   typewrite(view.firstElementChild);
+}
+
+// Schadensbericht: Fälle aus dem Editor plus alle Räume mit Status aus dem Karten-Editor
+function showDamage(topic) {
+  leave();
+  state.view = 'report';
+  const dmg = topic.damage || {};
+  const lv = STATION.levels[0];
+  const layer = loadLayer(lv.id, lv.layer);
+  const level = lv.plan;
+  const roomById = (id) => level.rooms.find((r) => r.id === id);
+  const label = { '': 'NOMINAL', warn: 'WARNUNG', damage: 'KRITISCH', offline: 'OFFLINE', sealed: 'ABGERIEGELT' };
+  const rows = [];
+  const covered = new Set();
+  for (const c of dmg.cases || []) {
+    const room = c.room && roomById(c.room);
+    const status = room ? layer.rooms[room.id]?.status || '' : c.status || '';
+    if (room) covered.add(room.id);
+    rows.push({ name: c.title || (room ? roomName(level, room, layer) : '–'), status, text: c.text || '' });
+  }
+  for (const room of level.rooms) {
+    const st = layer.rooms[room.id]?.status;
+    if (st && !covered.has(room.id)) rows.push({ name: roomName(level, room, layer), status: st, text: layer.rooms[room.id]?.info || '' });
+  }
+  const active = rows.filter((r) => r.status);
+  const hull = Number(dmg.hull);
+  const blocks = [];
+  if (dmg.intro) blocks.push({ type: 'text', text: `${dmg.intro} ${active.length} BEREICH${active.length === 1 ? '' : 'E'} MIT AUFFÄLLIGKEITEN.` });
+  if (!rows.length && dmg.none) blocks.push({ type: 'text', text: dmg.none });
+  rows.filter((r) => ['damage', 'offline', 'sealed'].includes(r.status) && r.text)
+    .forEach((r) => blocks.push({ type: 'alert', text: `${r.name}: ${r.text}` }));
+  if (rows.length) {
+    blocks.push({ type: 'table', head: ['BEREICH', 'STATUS', 'MELDUNG'], rows: rows.map((r) => [r.name, label[r.status] || 'NOMINAL', r.text || '–']) });
+  }
+  if (Number.isFinite(hull) && dmg.hullLabel) blocks.push({ type: 'meter', label: dmg.hullLabel, value: hull, state: hull < 50 ? 'crit' : hull < 90 ? 'warn' : '' });
+  if (dmg.recommendation) blocks.push({ type: 'text', text: `EMPFEHLUNG: ${dmg.recommendation}` });
+  showReport({ ...topic, blocks });
 }
 
 function showHelp() {
@@ -261,7 +308,7 @@ function showMap(topic) {
     onLevel: (i, info) => {
       setTitle(info.title, `R${i + 1} ◂`);
       if (info.plan) setHint('←→ RAUM · ID+⏎ · STRG+PFEILE BEWEGEN · +/# ZOOM · ESC');
-      else setHint(info.next ? `A+⏎ ${info.next} · ↑ ZURÜCK · ESC MENÜ` : '↑ ZURÜCK · ESC MENÜ');
+      else setHint(info.next ? `A+⏎ ${info.next} · ↑ ZURÜCK · STRG+PFEILE · +/# · ESC` : '↑ ZURÜCK · ESC MENÜ');
     },
   });
   state.map.show(LEVELS.indexOf(topic.level));
@@ -487,13 +534,7 @@ function onKey(e) {
   if (!state.ready) return;
   if (e.key === 'F9') { e.preventDefault(); sound.toggle(); updateFlags(); return; }
   if (e.key === 'F10') { e.preventDefault(); document.body.classList.toggle('crt'); return; }
-  if (e.key === 'F8') {
-    e.preventDefault();
-    const on = document.body.classList.toggle('retro');
-    try { localStorage.setItem('apollo.retro', on ? '1' : ''); } catch { /* egal */ }
-    return;
-  }
-  const onPlan = state.view === 'map' && state.map?.info?.plan && !state.map.animating;
+  const onPlan = state.view === 'map' && state.map && !state.map.animating;
   if (onPlan && e.ctrlKey && e.key.startsWith('Arrow')) {
     e.preventDefault();
     const d = { ArrowLeft: [-0.2, 0], ArrowRight: [0.2, 0], ArrowUp: [0, -0.2], ArrowDown: [0, 0.2] }[e.key];
@@ -549,13 +590,17 @@ function onKey(e) {
 
 // ---------- Start ----------
 
-// Änderungen aus dem Karten-Editor (anderes Fenster) live übernehmen
+// Änderungen aus dem Editor (anderes Fenster) live übernehmen
 addEventListener('storage', (e) => {
   if (e.key && e.key.startsWith('apollo.map.') && state.view === 'map') state.map?.redrawStation();
+  if (e.key === CONTENT_KEY) {
+    loadContent();
+    initChromeText();
+    if (state.view === 'menu') showMenu();
+  }
 });
 
 async function main() {
-  try { if (localStorage.getItem('apollo.retro')) document.body.classList.add('retro'); } catch { /* egal */ }
   fit();
   addEventListener('resize', fit);
   addEventListener('keydown', onKey);

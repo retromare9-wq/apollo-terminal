@@ -28,7 +28,7 @@ export const CONFIG = {
       ['DIST. SOL', '38.41 PC · 125.3 LY'],
       ['SIGNAL LAG', '125 Y 04 M'],
       ['FTL TRANSIT', '≈ 7 MONATE · CRYO'],
-      ['JURISDICTION', '<span class="warn">CONTESTED</span>'],
+      ['JURISDICTION', 'CONTESTED'],
     ],
     legend: [
       ['dots', 'THE INDEPENDENT CORE SYSTEM COLONIES'],
@@ -38,6 +38,36 @@ export const CONFIG = {
       ['hatch', 'THE FRONTIER'],
     ],
   },
+  // Sternenkarte: Beschriftungen beim Einrasten
+  starLock: ['TARGET LOCKED', 'DS282'],
+  // Systemkarte: Namen der sechs Umlaufbahnen von innen nach außen; die dritte ist der Gasriese
+  systemmap: {
+    planets: ['DS282-I', 'DS282-II', 'CARPENTER 74', 'DS282-IV', 'DS282-V', 'DS282-VI'],
+    lock: ['TARGET LOCKED', 'TWEX9'],
+    coord: 'CARPENTER 74 // ORBIT',
+  },
+  // Mondkarte: Datenzeilen links und Beschriftungen beim Einrasten
+  moonmap: {
+    rows: ['PRIMARY CARPENTER 74', 'LAT   32.14 N', 'LON  118.07 E', 'GRAV   0.38 G', 'ATM    NONE', 'TEMP  -142 °C'],
+    lock: ['TARGET LOCKED', 'ON-TWEX9'],
+    coord: 'DEC 0084 6402',
+  },
+  // Startsequenz (Zeilen des Systemchecks)
+  boot: [
+    'WEYLAND-YUTANI CORP.  //  SYSTEMS DIVISION',
+    'APOLLO 3000 SERIES   BIOS REV 4.12   (C) 2183',
+    '',
+    'MEMORY TEST ............................. 65536K OK',
+    'CORE PROCESSOR ARRAY .................... ONLINE',
+    'SENSOR GRID ............................. ONLINE',
+    'LIFE SUPPORT INTERFACE .................. NOMINAL',
+    'REACTOR TELEMETRY ....................... ONLINE',
+    'INTERCOM RELAY .......................... ONLINE',
+    'STRUCTURAL SENSORS ...................... 2 WARNINGS',
+    'NAVIGATION DATABASE ..................... LOADED',
+    '',
+    'LOADING A.P.O.L.L.O. KERNEL',
+  ],
   greeting: 'A.P.O.L.L.O. ONLINE. WÄHLEN SIE EINE FUNKTION ODER STELLEN SIE EINE FRAGE.',
   // Kurzanzeige rechts im Hauptmenü. state: '' | 'warn' | 'crit'
   readouts: [
@@ -62,29 +92,24 @@ export const TOPICS = [
   {
     id: 'schaden',
     title: 'SCHADENSBERICHT',
-    view: 'report',
+    view: 'damage',
     example: 'GIBT ES SCHÄDEN AUF DER STATION?',
     keywords: ['schaden', 'schäden', 'beschädig', 'defekt', 'kaputt', 'leck', 'hüllenbruch', 'bruch', 'riss',
       'reparatur', 'zerstör', 'damage', 'zwischenfall', 'störung', 'integrität'],
     weak: ['hülle', 'problem', 'intakt'],
-    blocks: [
-      { type: 'text', text: 'STRUKTURANALYSE ABGESCHLOSSEN. 2 BEREICHE MIT AUFFÄLLIGKEITEN ERKANNT.' },
-      { type: 'alert', text: 'XENOBIOLOGIE 2: DRUCKVERLUST DURCH HÜLLENBRUCH. SCHOTT VERRIEGELT.' },
-      {
-        type: 'table',
-        head: ['BEREICH', 'STATUS', 'INTEGRITÄT'],
-        rows: [
-          ['ADMINISTRATION', 'NOMINAL', '100%'],
-          ['WOHNBEREICHE', 'NOMINAL', '98%'],
-          ['KRANKENSTATION', 'NOMINAL', '96%'],
-          ['XENOBIOLOGIE', 'KRITISCH', '41%'],
-          ['TECHNIK & SYSTEME', 'WARNUNG', '78%'],
-          ['GEOLOGIE', 'NOMINAL', '92%'],
-        ],
-      },
-      { type: 'meter', label: 'HÜLLENINTEGRITÄT GESAMT', value: 87, state: 'warn' },
-      { type: 'text', text: 'EMPFEHLUNG: WARTUNGSTEAM ZU XENOBIOLOGIE 2 ENTSENDEN. KÜHLKREISLAUF IN TECHNIK & SYSTEME 6 ÜBERPRÜFEN.' },
-    ],
+    // Schadensbericht: Einleitung, Fälle, Hüllenintegrität, Empfehlung.
+    // Fälle mit Raum übernehmen den Raumstatus aus dem Karten-Editor; Räume mit Status
+    // erscheinen auch ohne eigenen Fall im Bericht.
+    damage: {
+      intro: 'STRUKTURANALYSE ABGESCHLOSSEN.',
+      cases: [
+        { room: '', title: 'XENOBIOLOGIE 2', status: 'damage', text: 'DRUCKVERLUST DURCH HÜLLENBRUCH. SCHOTT VERRIEGELT.' },
+      ],
+      hull: 87,
+      hullLabel: 'HÜLLENINTEGRITÄT GESAMT',
+      recommendation: '',
+      none: 'KEINE SCHÄDEN GEMELDET. ALLE BEREICHE NOMINAL.',
+    },
   },
   {
     id: 'lebenserhaltung',

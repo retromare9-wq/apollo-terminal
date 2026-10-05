@@ -304,12 +304,10 @@ body.crt .crt-overlay::after {
 
 /* ---------- Stationsplan ---------- */
 .map.lvl-station .hud-tr, .map.lvl-station .hud-br { display: none; }
-.st-corrs rect { fill: #561a10; }
-.st-fill { fill: #140a05; }
-.z-med .st-fill { fill: #1f0d06; }
-.z-wohn .st-fill, .z-zivil .st-fill { fill: #19110a; }
-.z-admin .st-fill, .z-marshal .st-fill { fill: #121010; }
-.z-geo .st-fill { fill: #170e09; }
+:root { --map-room: #3a2410; --map-corr: #7a2418; --map-corr-edge: #a8361f; }
+.st-corr-edge { fill: var(--map-corr-edge); stroke: var(--map-corr-edge); stroke-width: 3; }
+.st-corr { fill: var(--map-corr); }
+.st-fill { fill: var(--map-room); }
 .st-wall { fill: none; stroke: var(--amber); stroke-width: 1.6; }
 .st-inner { stroke: var(--amber-dim); stroke-width: 1; }
 .st-shaft { fill: #0f0806; stroke: var(--amber-dim); stroke-width: 1; }
@@ -328,10 +326,10 @@ body.crt .crt-overlay::after {
 .st-mark.s-damage, .st-mark.s-offline, .st-mark.s-sealed { fill: var(--red); }
 .st-room.s-warn .st-wall { stroke: var(--yellow); stroke-width: 2; }
 .st-room.s-damage .st-wall { stroke: var(--red); stroke-width: 2.2; animation: alarm 1s steps(1) infinite; }
-.st-room.s-damage .st-fill { fill: #3a0f08; }
-.st-room.s-offline .st-fill, .st-room.s-sealed .st-fill { fill: #2a0b06; }
+.st-room.s-damage .st-fill { fill: #5a160c; }
+.st-room.s-offline .st-fill, .st-room.s-sealed .st-fill { fill: #401009; }
 .st-room.sel .st-wall { stroke: var(--mint); stroke-width: 3; animation: none; }
-.st-room.sel .st-fill { fill: #12261b; }
+.st-room.sel .st-fill { fill: #17402a; }
 .sp-title { font-size: 17px; font-weight: 700; color: var(--yellow); margin: 2px 0 6px; }
 .sp-note { margin-top: 8px; border: 2px solid var(--rust-2); padding: 6px 8px; line-height: 1.4; }
 
@@ -353,19 +351,6 @@ body.crt .crt-overlay::after {
 .st-picto { pointer-events: none; }
 .sp-pics { display: flex; gap: 6px; flex-wrap: wrap; margin: 8px 0 2px; }
 
-/* ---------- Retro-Modus (F8): Bitmap-Schrift, grobe Rasterzeilen, harte Kanten ---------- */
-body.retro { --font: 'VT323', 'IBM Plex Mono', monospace; }
-body.retro .screen { font-size-adjust: .62; letter-spacing: .02em; }
-body.retro .screen svg { shape-rendering: crispEdges; }
-body.retro .titlebar-inner, body.retro .hl, body.retro .menu-list li.sel { text-shadow: none; }
-body.retro.crt .crt-overlay {
-  background:
-    repeating-linear-gradient(to bottom, transparent 0 2px, rgba(0, 0, 0, .45) 2px 4px),
-    repeating-linear-gradient(to right, rgba(255, 60, 30, .03) 0 1px, transparent 1px 3px),
-    radial-gradient(ellipse at center, transparent 50%, rgba(0, 0, 0, .75) 100%);
-}
-body.retro.crt .screen { text-shadow: 0 0 2px rgba(255, 110, 40, .9), 0 0 9px rgba(226, 70, 30, .45); }
-body.retro .cursor { animation-duration: .6s; }
 
 /* Aufzüge: Piktogramme im blau umrandeten Kasten */
 .st-liftbg { fill: #0a0604; }

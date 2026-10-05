@@ -34,21 +34,12 @@ export async function runBoot(root, config, sound) {
   await sleep(900);
 
   const log = root.querySelector('.boot-log');
-  const lines = [
-    `${config.company}  //  SYSTEMS DIVISION`,
-    `${config.model} SERIES   BIOS REV 4.12   (C) ${config.year}`,
-    '',
-    'MEMORY TEST ............................. 65536K OK',
-    'CORE PROCESSOR ARRAY .................... ONLINE',
-    'SENSOR GRID ............................. ONLINE',
-    'LIFE SUPPORT INTERFACE .................. NOMINAL',
-    'REACTOR TELEMETRY ....................... ONLINE',
-    'INTERCOM RELAY .......................... ONLINE',
-    'STRUCTURAL SENSORS ...................... <span class="warn">2 WARNINGS</span>',
-    'NAVIGATION DATABASE ..................... LOADED',
-    '',
-    `LOADING ${config.computer} KERNEL <span class="blink">_</span>`,
-  ];
+  const escH = (t) => String(t ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  const src = Array.isArray(config.boot) && config.boot.length ? config.boot : [`LOADING ${config.computer} KERNEL`];
+  const lines = src.map((l, i) => {
+    const h = escH(l).replace(/(\d* ?WARNINGS?|WARNUNG(EN)?|FEHLER|ERROR)/g, '<span class="warn">$1</span>');
+    return i === src.length - 1 ? `${h} <span class="blink">_</span>` : h;
+  });
   for (const line of lines) {
     if (skipped) break;
     log.insertAdjacentHTML('beforeend', `${line}\n`);

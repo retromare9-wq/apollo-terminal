@@ -88,7 +88,9 @@ export function drawStationPlan(g, cfg, level, layer, opts = {}) {
   const statusOf = (id) => layer.rooms[id]?.status || '';
 
   const corr = el('g', { class: 'st-corrs' }, g);
-  level.corridors.forEach(([x0, y0, x1, y1]) => el('rect', { x: x0, y: y0, width: x1 - x0, height: y1 - y0 }, corr));
+  // Erst eine Kontur um alle Gänge, dann die Füllung – so entstehen an Kreuzungen keine Nähte
+  level.corridors.forEach(([x0, y0, x1, y1]) => el('rect', { x: x0, y: y0, width: x1 - x0, height: y1 - y0, class: 'st-corr-edge' }, corr));
+  level.corridors.forEach(([x0, y0, x1, y1]) => el('rect', { x: x0, y: y0, width: x1 - x0, height: y1 - y0, class: 'st-corr' }, corr));
 
   const roomLayer = el('g', {}, g);
   const nodes = {};

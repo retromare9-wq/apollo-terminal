@@ -17,6 +17,10 @@ const easeOut = (k) => 1 - (1 - k) ** 3;
 const easeIn = (k) => k ** 3;
 const easeInOut = (k) => (k < 0.5 ? 4 * k ** 3 : 1 - (-2 * k + 2) ** 3 / 2);
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const escH = (t) => String(t ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const markH = (t) => escH(t)
+  .replace(/(KRITISCH|OFFLINE|CRITICAL|HOSTILE)/g, '<span class="crit">$1</span>')
+  .replace(/(WARNUNG|WARNING|CONTESTED)/g, '<span class="warn">$1</span>');
 
 function scaled(rect, factor, cx = rect.x + rect.w / 2, cy = rect.y + rect.h / 2) {
   const w = rect.w * factor;
@@ -56,10 +60,11 @@ function drawBackdrop(g, r, vx, hy) {
 // ---------- Ebenen ----------
 
 function drawSystem(g, cfg) {
+  const sm = cfg.systemmap || {};
+  const names = sm.planets || [];
   const r = rng(23);
   drawBackdrop(g, r, [90, 250, 750, 910], [90, 356]);
   const C = { x: 500, y: 223 };
-  const roman = ['I', 'II', 'III', 'IV', 'V', 'VI'];
   const orbits = [[48, 125], [88, 35], [150, 320], [225, 150], [310, 20], [410, 205]];
   let T = null;
   orbits.forEach(([rad, deg], i) => {
@@ -73,13 +78,13 @@ function drawSystem(g, cfg) {
       el('ellipse', { cx: p.x, cy: p.y, rx: 21, ry: 5, class: 'm-gasring' }, g);
       el('circle', { cx: p.x, cy: p.y, r: 12, class: 'm-planet' }, g);
       [-5, 0, 5].forEach((dy) => el('line', { x1: p.x - Math.sqrt(144 - dy * dy), y1: p.y + dy, x2: p.x + Math.sqrt(144 - dy * dy), y2: p.y + dy, class: 'm-band' }, g));
-      txt(g, p.x, p.y + 50, cfg.planet, 'm-label', { 'text-anchor': 'middle' });
+      txt(g, p.x, p.y + 50, names[i] || cfg.planet, 'm-label', { 'text-anchor': 'middle' });
       const m = (-40 * Math.PI) / 180;
       T = { x: p.x + 30 * Math.cos(m), y: p.y + 30 * Math.sin(m) };
       el('circle', { cx: T.x, cy: T.y, r: 4.5, class: 'm-target' }, g);
     } else {
       el('circle', { cx: p.x, cy: p.y, r: 4 + (i % 3) * 2, class: 'm-dot' }, g);
-      txt(g, p.x + 10, p.y + 4, `${cfg.star}-${roman[i]}`, 'm-label');
+      if (names[i]) txt(g, p.x + 10, p.y + 4, names[i], 'm-label');
     }
   });
   el('circle', { cx: C.x, cy: C.y, r: 22, class: 'm-orbit' }, g);
@@ -88,8 +93,8 @@ function drawSystem(g, cfg) {
   return {
     title: `SYSTEMKARTE ${cfg.star}`,
     target: T,
-    lock: ['TARGET LOCKED', cfg.moon],
-    coord: `${cfg.planet} // ORBIT`,
+    lock: sm.lock || ['TARGET LOCKED', cfg.moon],
+    coord: sm.coord ?? `${cfg.planet} // ORBIT`,
     lockTag: 'A',
     next: `MOND ${cfg.moon}`,
   };
@@ -128,14 +133,15 @@ function drawMoon(g, cfg) {
   el('circle', { cx: S.x, cy: S.y, r: 14, class: 'm-orbit' }, g);
   el('circle', { cx: S.x, cy: S.y, r: 6, class: 'm-dot' }, g);
   txt(g, C.x - R - 20, C.y - R + 20, cfg.moon, 'm-label', { 'text-anchor': 'end' });
-  [`PRIMARY ${cfg.planet}`, 'LAT   32.14 N', 'LON  118.07 E', 'GRAV   0.38 G', 'ATM    NONE', 'TEMP  -142 °C'].forEach((line, i) => {
+  const mm = cfg.moonmap || {};
+  (mm.rows || []).forEach((line, i) => {
     txt(g, 30, 240 + i * 22, line, 'm-read');
   });
   return {
     title: `MOND ${cfg.moon}`,
     target: S,
-    lock: ['TARGET LOCKED', cfg.stationCode],
-    coord: 'DEC 0084 6402',
+    lock: mm.lock || ['TARGET LOCKED', cfg.stationCode],
+    coord: mm.coord ?? 'DEC 0084 6402',
     lockTag: 'A',
     next: 'STATIONSPLAN',
   };
@@ -267,9 +273,9 @@ export class MapView {
     const sm = this.config.starmap;
     this.panel.innerHTML = `
       <div class="sp-head">POSITION DATA</div>
-      ${sm.rows.map(([k, v]) => `<div class="sp-row"><span class="dim">${k}</span><span>${v}</span></div>`).join('')}
+      ${sm.rows.map(([k, v]) => `<div class="sp-row"><span class="dim">${escH(k)}</span><span>${markH(v)}</span></div>`).join('')}
       <div class="sp-head">LEGEND</div>
-      ${sm.legend.map(([cls, name, sub]) => `<div class="sp-leg"><i class="sw ${cls}"></i><span>${name}${sub ? `<small>${sub}</small>` : ''}</span></div>`).join('')}
+      ${sm.legend.map(([cls, name, sub]) => `<div class="sp-leg"><i class="sw ${cls}"></i><span>${escH(name)}${sub ? `<small>${escH(sub)}</small>` : ''}</span></div>`).join('')}
       <div class="sp-key"><span class="hl">A</span> ${this.info.next}</div>`;
     this.panel.hidden = false;
     const items = [...this.panel.children];
@@ -364,16 +370,16 @@ export class MapView {
     return hits[0].i;
   }
 
-  // Freie Navigation im Stationsplan (Strg+Pfeile, + / #)
+  // Freie Navigation auf allen Karten (Strg+Pfeile, + / #)
   panBy(fx, fy) {
-    if (!this.info?.plan || this.animating) return;
+    if (!this.info || this.animating) return;
     const r = this.vb || this.home;
     const tok = ++this.token;
     this.zoomTo(r, { ...r, x: r.x + r.w * fx, y: r.y + r.h * fy }, 160, easeOut, tok);
   }
 
   zoomBy(f) {
-    if (!this.info?.plan || this.animating) return;
+    if (!this.info || this.animating) return;
     const r = this.vb || this.home;
     const w = Math.min(Math.max(r.w * f, 250), this.home.w * 1.5);
     const k = w / r.w;

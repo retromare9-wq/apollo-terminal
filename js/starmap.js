@@ -133,7 +133,7 @@ export function drawStarmap(g, cfg) {
     via: { x: 330, y: 930 },
     world,
     route,
-    lock: ['TARGET LOCKED', cfg.star],
+    lock: cfg.starLock || ['TARGET LOCKED', cfg.star],
     coord: `${cfg.starmap.distancePc.toFixed(2)} PC`,
     lockTag: 'A',
     lockScale: homeW / 1000,
