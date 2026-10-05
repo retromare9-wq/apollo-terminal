@@ -19,9 +19,12 @@ Nach dem Start fragt A.P.O.L.L.O. nach der Identität:
 | Rot | zusätzlich **ZUGRIFF STATIONSSYSTEME** |
 | Mainframe | zusätzlich **SELBSTZERSTÖRUNG EINLEITEN** |
 
-Die Menütasten (A, B, C …) werden je nach Stufe automatisch vergeben. Gesperrte Kategorien
-melden bei freier Eingabe „ZUGRIFF VERWEIGERT“. Benutzer und Stufe stehen unten rechts.
-`ABMELDEN` + Enter beendet die Sitzung.
+Die Menütasten (A, B, C …) werden je nach Stufe automatisch vergeben (W und X sind reserviert).
+Gesperrte Kategorien melden bei freier Eingabe „ZUGRIFF VERWEIGERT“. Benutzer und Stufe stehen
+unten rechts; die Stationswerte im Hauptmenü erscheinen erst ab Orange.
+
+Von überall im Terminal: **W + Enter** wechselt die Zugangsstufe, **X + Enter** meldet ab
+(zurück zur Identifikation).
 
 **Selbstzerstörung:** beliebigen Code eingeben, mit `JA` bestätigen → Countdown mit Alarm.
 Im Selbstzerstörungs-Fenster bricht `ABBRUCH` (danach Code) ab; neu laden setzt alles zurück.
@@ -51,7 +54,7 @@ Während einer Karten-Animation überspringt jede Taste direkt zum Ziel.
 `editor.html` – über die Reiter in der Fußleiste:
 
 - **STATIONSPLAN**: Karten-Editor (siehe unten)
-- **ALLGEMEIN**: Namen von Computer, Station, Mond, Planet, Stern, Sektor; Begrüßung, Statusanzeige im Menü, Startsequenz, Interkom-Antworten
+- **ALLGEMEIN**: Namen von Computer, Station, Mond, Planet, Stern, Sektor; Kennung und Datum im Infokasten oben rechts; Begrüßung, Statusanzeige im Menü, Startsequenz, Interkom-Antworten
 - **STERNENKARTE**: Sternensysteme und Sektoren benennen (in der Kartenvorschau anklicken), Datenpanel, Legende
 - **SYSTEM-/MONDKARTE**: alle Beschriftungen und Datenzeilen der Karten
 - **SCHADENSBERICHT**: Einleitung, Fälle, Hüllenintegrität, Empfehlung; Fälle mit Raum setzen den Raumstatus direkt im Stationsplan

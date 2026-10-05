@@ -38,7 +38,7 @@ const userRank = () => (!state.user ? -1 : state.user.mainframe ? 3 : RANK[state
 const canSee = (access) => (RANK[access] ?? 1) <= userRank();
 const levelName = () => (state.user ? (state.user.mainframe ? ACCESS.mainframe : ACCESS[state.user.level]) : '–');
 const levelClass = () => (state.user ? `lvl-${state.user.mainframe ? 'red' : state.user.level}` : '');
-const KEYS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+const KEYS = 'ABCDEFGHIJKLMNOPQRSTUVYZ'; // W und X sind für Zugang und Abmelden reserviert
 
 // Sichtbare Menüpunkte mit automatisch vergebenen Tasten
 function visibleMenu() {
@@ -76,20 +76,14 @@ function renderCmd() {
 }
 
 function initChromeText() {
-  $('#info-model').textContent = `${CONFIG.computer} ${String(CONFIG.model).replace(/^APOLLO\s*/, '')}`.trim();
-  $('#info-station').textContent = CONFIG.sector;
-  $('#info-code').textContent = CONFIG.star;
+  $('#info-model').textContent = `${CONFIG.computer}  ${CONFIG.stationCode}`;
+  $('#info-code').textContent = CONFIG.infoCode ?? '';
+  $('#info-date').textContent = CONFIG.date ?? '';
 }
 
 function initChrome() {
   $('#info-logo').innerHTML = wyLogo();
   initChromeText();
-
-  const t0 = Date.now();
-  setInterval(() => {
-    const s = (Date.now() - t0) / 1000;
-    $('#f-clock').textContent = `${pad(Math.floor(s / 3600))}H${pad(Math.floor(s / 60) % 60)}M ${(s % 60).toFixed(4).padStart(7, '0')}`;
-  }, 90);
   updateFlags();
   updateUser();
 }
@@ -174,18 +168,17 @@ function showMenu() {
         </ul>
       </section>
       <aside class="menu-side">
-        <div class="side-head"><span>DYNAMIC STATUS</span></div>
         <div class="readouts user">
           <div class="ro col"><span class="dim">AKTUELLER BENUTZER</span><span>${esc(state.user?.name || '–')}</span></div>
-          <div class="ro col"><span class="dim">ZUGANGSSTUFE</span><span class="${levelClass()}">${esc(levelName())}</span></div>
+          <div class="ro col switch" title="Zugang wechseln"><span class="dim">ZUGANGSSTUFE <span class="ro-key">[W] WECHSELN</span></span><span class="${levelClass()}">${esc(levelName())}</span></div>
         </div>
-        <div class="readouts">
+        ${canSee('orange') ? `<div class="readouts station">
           ${CONFIG.readouts.map((r) => `<div class="ro"><span>${esc(r.label)}</span><span class="${r.state}">${esc(r.value)}</span></div>`).join('')}
-        </div>
+        </div>` : ''}
         ${state.destruct ? '<div class="ro crit sd-mini"><span>SELBSTZERSTÖRUNG</span><span class="sd-clock"></span></div>' : ''}
-        <div class="side-foot dim">ABMELDEN: „ABMELDEN“ + ⏎</div>
       </aside>
     </div>`;
+  $('.ro.switch', view)?.addEventListener('click', changeAccess);
   view.querySelectorAll('.menu-list li').forEach((li) => {
     li.addEventListener('mouseenter', () => { state.menuIndex = +li.dataset.i; markMenu(); });
     li.addEventListener('click', () => openMenu(+li.dataset.i));
@@ -238,18 +231,13 @@ function blockHtml(b) {
   }
 }
 
-function stamp() {
-  const d = new Date();
-  return `${CONFIG.year}.${pad(d.getMonth() + 1)}.${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
-}
-
 function showReport(topic) {
   leave();
   state.view = 'report';
   setTitle(topic.title, '2B ◂');
   setHint('⏎ ÜBERSPRINGEN · ↑↓ BLÄTTERN · ESC MENÜ');
   view.innerHTML = `<div class="report">
-      <div class="report-head"><span>REF ${topic.id.toUpperCase().slice(0, 4)}-${pad(topic.title.length * 37, 4)} // ${esc(CONFIG.stationCode)}</span><span>${stamp()}</span></div>
+      <div class="report-head"><span>REF ${topic.id.toUpperCase().slice(0, 4)}-${pad(topic.title.length * 37, 4)} // ${esc(CONFIG.stationCode)}</span></div>
       ${topic.blocks.map(blockHtml).join('')}
     </div>`;
   typewrite(view.firstElementChild);
@@ -303,7 +291,7 @@ function showHelp() {
       <div class="help-grid">
         ${examples.map((t) => `<div class="help-item"><span class="hl">${esc(t.title)}</span><span class="dim">z.B. „${esc(t.example)}“</span></div>`).join('')}
       </div>
-      <p class="dim">ANGEMELDET: ${esc(state.user?.name || '–')} // ZUGANGSSTUFE ${esc(levelName())} · „ABMELDEN“ BEENDET DIE SITZUNG.</p>
+      <p class="dim">ANGEMELDET: ${esc(state.user?.name || '–')} // ZUGANGSSTUFE ${esc(levelName())} · W+⏎ ZUGANG WECHSELN · X+⏎ ABMELDEN.</p>
       <p class="dim">TASTEN: ↑↓ AUSWAHL · ⏎ BESTÄTIGEN · ESC ZURÜCK · F9 TON AN/AUS · F10 RÖHRENEFFEKT · F11 VOLLBILD</p>
     </div>`;
   typewrite(view.firstElementChild, 600);
@@ -456,7 +444,7 @@ function sendChat(text) {
   sound.beep();
   chatLine('out', `<span class="who">SIE ▸</span> ${esc(text.toUpperCase())}`);
   if (chat.mode === 'message') {
-    chatLine('sys', `NACHRICHT ÜBERMITTELT // ${stamp()}`);
+    chatLine('sys', 'NACHRICHT ÜBERMITTELT.');
     return;
   }
   const surname = chat.person.name.split(' ').pop();
@@ -481,15 +469,15 @@ const LOGIN_LEVEL = [['green', 'GRÜN'], ['orange', 'ORANGE'], ['red', 'ROT'], [
 
 function loginOptions() { return state.login?.step === 'level' ? LOGIN_LEVEL : LOGIN_ID; }
 
-function showLogin(step = 'id', name = '') {
+function showLogin(step = 'id', name = '', change = false) {
   leave();
   state.view = 'login';
-  state.login = { step, name, index: 0 };
-  setTitle('IDENTIFIKATION', 'ID ◂');
+  state.login = { step, name, index: 0, change };
+  setTitle(change ? 'ZUGANG WECHSELN' : 'IDENTIFIKATION', 'ID ◂');
   const opts = loginOptions();
   const cls = { green: 'lvl-green', orange: 'lvl-orange', red: 'lvl-red', mainframe: 'lvl-red' };
   if (step === 'id') setHint('NAME EINTIPPEN + ⏎ · ODER ↑↓ / BUCHSTABE WÄHLEN');
-  else setHint('↑↓ / BUCHSTABE WÄHLEN · ⏎ BESTÄTIGEN · ESC ZURÜCK');
+  else setHint(`↑↓ / BUCHSTABE WÄHLEN · ⏎ BESTÄTIGEN · ESC ${change ? 'ABBRECHEN' : 'ZURÜCK'}`);
   view.innerHTML = `<div class="login">
       <div class="login-box">
         <div class="login-head"><span>${esc(CONFIG.company)} // ZUGANGSKONTROLLE</span><span>${esc(CONFIG.stationCode)} ${esc(CONFIG.terminalId)}</span></div>
@@ -546,6 +534,13 @@ async function grant(user) {
   showMenu();
 }
 
+// W: Zugangsstufe wechseln (Name bleibt)
+function changeAccess() {
+  if (!state.user) return;
+  sound.confirm();
+  showLogin('level', state.user.name, true);
+}
+
 function logout() {
   sound.beep();
   state.user = null;
@@ -567,7 +562,7 @@ function showCommlog() {
   const list = visibleLog();
   if (state.logIndex >= list.length) state.logIndex = 0;
   view.innerHTML = `<div class="log">
-      <div class="report-head"><span>${list.length} EINTRÄGE // FREIGABE ${esc(levelName())}</span><span>${stamp()}</span></div>
+      <div class="report-head"><span>${list.length} EINTRÄGE // FREIGABE ${esc(levelName())}</span></div>
       ${list.length ? `<table class="tbl log-tbl">
         <colgroup><col style="width:125px"><col style="width:80px"><col style="width:200px"><col style="width:200px"><col><col style="width:105px"><col style="width:180px"></colgroup>
         <thead><tr><th>DATUM</th><th>ZEIT</th><th>SENDER</th><th>EMPFÄNGER</th><th>BETREFF</th><th>ZUGANG</th><th>STATUS</th></tr></thead>
@@ -842,6 +837,7 @@ async function query(raw) {
 
 function back() {
   if (state.view === 'login') {
+    if (state.login?.change) { sound.beep(); showMenu(); return; }
     if (state.login?.step === 'level') { sound.beep(); showLogin('id'); }
     return;
   }
@@ -894,6 +890,13 @@ function submit() {
   state.buffer = '';
   renderCmd();
 
+  // W / X: von überall Zugang wechseln bzw. abmelden (nicht während einer Code-Eingabe)
+  const codeEntry = state.view === 'selfdestruct' && /code/.test(state.sd?.step || '');
+  if (state.user && !codeEntry && !(state.view === 'login' && !state.login?.change)) {
+    const cmd = normalize(raw);
+    if (cmd === 'x' || ['abmelden', 'logout', 'abmeldung', 'log out'].includes(cmd)) return logout();
+    if (cmd === 'w' && state.view !== 'login') return changeAccess();
+  }
   if (state.view === 'chat') {
     if (raw) sendChat(raw);
     return;
@@ -914,7 +917,7 @@ function submit() {
     sdInput(raw);
     return;
   }
-  if (['abmelden', 'logout', 'abmeldung', 'log out'].includes(normalize(raw))) return logout();
+
   if (!raw) {
     if (state.view === 'menu') openMenu(state.menuIndex);
     else if (state.view === 'commlog') openMessage(state.logIndex);

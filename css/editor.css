@@ -127,7 +127,8 @@ body.tab-content .map-only, body.tab-content .ed-tools, body.tab-content .ed-can
 .ed-ctitle { font-weight: 700; font-size: 16px; color: var(--yellow); letter-spacing: .08em; }
 .ed-cbody { flex: 1; overflow-y: auto; padding: 14px 18px 40px; }
 .ed-cgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 28px; max-width: 1500px; }
-.ed-cgrid.wide-right { grid-template-columns: 340px 1fr; }
+.ed-cgrid.wide-right { grid-template-columns: 380px minmax(0, 1fr); }
+.ed-cgrid > section { min-width: 0; }
 .ed-cone { max-width: 1300px; }
 .ed-crow { display: flex; gap: 8px; align-items: flex-end; }
 .ed-crow .ed-field { flex: 1; margin: 6px 0; }
@@ -138,7 +139,7 @@ body.tab-content .map-only, body.tab-content .ed-tools, body.tab-content .ed-can
 .ed-crow select:not(.ed-field select) { background: #120905; color: var(--amber); border: 2px solid var(--amber-dim); font: 500 13px var(--font); padding: 5px; }
 .ed-case, .ed-block, .ed-person { border: 2px solid var(--rust-2); padding: 6px 12px 8px; margin-bottom: 10px; }
 .ed-tlist { display: grid; gap: 5px; margin-bottom: 8px; }
-.ed-tsel { text-align: left; }
+.ed-tsel { text-align: left; white-space: normal !important; width: 100%; line-height: 1.35; }
 .ed-tsel.on { background: var(--yellow) !important; color: var(--ink) !important; }
 .ed-checkf { display: flex !important; align-items: center; gap: 6px; flex: 0 0 auto !important; padding-bottom: 8px; }
 .ed-checkf input { accent-color: var(--mint); }

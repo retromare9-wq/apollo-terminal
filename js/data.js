@@ -19,6 +19,9 @@ export const CONFIG = {
   system: 'DS282 SYSTEM',
   sector: 'BORODINO SECTOR',
   terminalId: 'T-01',
+  // Infokasten oben rechts, zweite Zeile: Kennung und Datum
+  infoCode: 'BS-DS282',
+  date: '09.02.2182',
   // Sternenkarte: Datenpanel und Legende
   starmap: {
     distancePc: 38.41,

@@ -110,6 +110,9 @@ export function createContentEditor(root, { level, getLayer, setRoomStatus, toas
           ${input('BETREIBER', 'config.company')}
           ${input('JAHR', 'config.year', 'num')}
           ${input('TERMINAL-KENNUNG', 'config.terminalId')}
+          ${head('INFOKASTEN OBEN RECHTS (ZWEITE ZEILE)')}
+          ${input('KENNUNG', 'config.infoCode')}
+          ${input('DATUM', 'config.date')}
           ${head('ORTE')}
           ${input('STATION (VOLLER NAME)', 'config.station')}
           ${input('STATIONSKÜRZEL', 'config.stationCode')}
@@ -529,7 +532,7 @@ export function createContentEditor(root, { level, getLayer, setRoomStatus, toas
       if (!confirm('Diesen Reiter auf die Vorgabe zurücksetzen?')) return;
       const d = defaultContent();
       if (tab === 'general') {
-        for (const k of ['computer', 'computerLong', 'model', 'company', 'year', 'terminalId', 'station', 'stationCode', 'moon', 'planet', 'star', 'system', 'sector', 'greeting', 'readouts', 'boot']) c.config[k] = d.config[k];
+        for (const k of ['computer', 'computerLong', 'model', 'company', 'year', 'terminalId', 'infoCode', 'date', 'station', 'stationCode', 'moon', 'planet', 'star', 'system', 'sector', 'greeting', 'readouts', 'boot']) c.config[k] = d.config[k];
         c.replies = d.replies;
       }
       if (tab === 'stars') { c.config.starmap = d.config.starmap; c.config.starLock = d.config.starLock; }

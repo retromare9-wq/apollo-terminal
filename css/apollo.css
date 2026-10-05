@@ -109,6 +109,10 @@ body.crt .crt-overlay::after {
 
 .bottom { display: grid; grid-template-columns: 1fr 380px; gap: 26px; }
 .status, .lockbox { border: 3px solid var(--amber); display: flex; align-items: center; gap: 12px; padding: 0 14px; font-size: 15px; font-weight: 500; white-space: nowrap; overflow: hidden; }
+.lockbox { flex-direction: column; align-items: stretch; justify-content: center; gap: 1px; padding: 0 12px; }
+.lb-row { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.lb-row.keys { font-size: 12px; color: var(--amber); gap: 14px; }
+.lb-row.keys b { color: var(--yellow); }
 .hint { margin-left: auto; color: var(--amber); font-size: 13px; letter-spacing: .02em; overflow: hidden; text-overflow: ellipsis; }
 #f-snd { margin-left: auto; }
 .sq { display: inline-block; width: 15px; height: 15px; background: var(--amber); flex: none; }
@@ -375,7 +379,9 @@ svg.z-far .lbl, svg.z-far .st-mark { display: none; }
 .menu-list li.danger.sel { background: var(--red); color: var(--ink); }
 .ro.col { flex-direction: column; gap: 2px; }
 .ro.col span:last-child { font-weight: 700; font-size: 17px; }
-.side-foot { margin-top: auto; font-size: 12px; }
+.ro.switch { cursor: pointer; }
+.ro-key { float: right; color: var(--yellow); margin-left: 12px; }
+.readouts.station { margin-top: 14px; padding-top: 18px; border-top: 2px dashed var(--rust-2); }
 .sd-mini { border-color: var(--red); animation: blink 1s steps(1) infinite; }
 
 .login { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; }
