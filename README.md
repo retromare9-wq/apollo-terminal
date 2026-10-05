@@ -14,7 +14,10 @@ Interaktives Stationsterminal **A.P.O.L.L.O.** für ALIEN RPG: Die Spieler stell
 | A + Enter (Karte) | Zum markierten Ziel zoomen: Sternenkarte → System → Mond → Station |
 | Enter (leer) | Ausgewählten Punkt öffnen bzw. Textausgabe überspringen |
 | Esc | Zurück / Verbindung trennen |
-| ← → (Stationsplan) | Räume nacheinander auswählen; alternativ Raum-ID eintippen, z. B. `XENO-2` |
+| ← → (Stationsplan) | Räume nacheinander auswählen |
+| Raum-ID + Enter (Stationsplan) | Direkt zum Raum, z. B. `XENO-2`; nur die Abteilung (z. B. `XENO`) springt zum ersten Raum dieser Abteilung |
+| Strg + Pfeiltasten (Stationsplan) | Karte bewegen |
+| + / # (Stationsplan) | Hinein- / herauszoomen |
 | F8 | Retro-Modus an/aus (Bitmap-Schrift, grobe Rasterzeilen) |
 | F9 | Ton an/aus |
 | F10 | Röhrenmonitor-Effekt an/aus |
@@ -37,6 +40,7 @@ und Notiz eintragen.
 | 5 | Raum: ID, Name, Bereich, Status, Notiz · „Raumbeschreibung öffnen“ für Ästhetik, Sinneseindrücke, Untersuchung, Gegenstände und Piktogramme |
 | 6 | Radierer |
 | 7 | Piktogramm (Semiotic Standard, bis zu 5 pro Raum) |
+| 8 | Beschriftung setzen (vorhandene mit Werkzeug 1 anklicken, umbenennen, verschieben) |
 | G / O / R | Sicherheitsstufe (auch für die gewählte Tür) |
 | Entf · Strg+Z · Strg+Y | Löschen · Rückgängig · Wiederholen |
 

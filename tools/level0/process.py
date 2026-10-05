@@ -208,8 +208,15 @@ def quarters(letter, rows):
     return out
 rooms+=quarters('d',[(300,1525,'FFFS'),(425,1625,'FFF')])
 rooms+=quarters('e',[(550,1525,'FFFS'),(700,1625,'FFF')])
-rooms+=quarters('a',[(300,2850,'SSSSS'),(425,2825,'SSSSS')])
+rooms+=quarters('a',[(300,2825,'SSSSS'),(425,2825,'SSSSS')])
 rooms+=quarters('b',[(550,2825,'SSSSS'),(700,2825,'SSSSS')])
+
+# Admin 5 = Einzelquartier-Größe, Admin 6 = zwei Familienquartiere breit
+for r in rooms:
+    if r['id']=='ADMIN-5': r['rects']=[[2825,800,2925,900]]
+    if r['id']=='ADMIN-6': r['rects']=[[2925,800,3325,900]]
+# Innenlinien aus der Handzeichnung entfallen – Trennlinien setzt der Editor
+for r in rooms: r['lines']=[]
 
 # Marshal: keine Beschriftung für das Quartier
 for r in rooms:

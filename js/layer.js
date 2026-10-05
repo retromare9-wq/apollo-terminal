@@ -36,7 +36,7 @@ export const DESC_FIELDS = [
 export const MAX_PICTOS = 5;
 
 export function emptyLayer() {
-  return { doors: [], lines: [], cams: [], rooms: {}, lifts: {}, settings: { showCams: true } };
+  return { doors: [], lines: [], cams: [], rooms: {}, lifts: {}, labels: {}, settings: { showCams: true } };
 }
 
 function normalize(l) {
@@ -47,6 +47,7 @@ function normalize(l) {
     cams: Array.isArray(l?.cams) ? l.cams : e.cams,
     rooms: l?.rooms && typeof l.rooms === 'object' ? l.rooms : e.rooms,
     lifts: l?.lifts && typeof l.lifts === 'object' ? l.lifts : e.lifts,
+    labels: l?.labels && typeof l.labels === 'object' ? l.labels : e.labels,
     settings: { ...e.settings, ...(l?.settings || {}) },
   };
 }

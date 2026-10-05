@@ -1,7 +1,7 @@
 // Karten-Editor: Türen, Trennlinien, Kameras und Raumdaten auf einem Stationsplan eintragen.
 import { CONFIG, STATION } from './data.js';
 import { el } from './svg.js';
-import { drawStationPlan, roomName, roomCode, roomZone, liftData } from './stationplan.js';
+import { drawStationPlan, roomName, roomCode, roomZone, liftData, applyZoom, planLabels } from './stationplan.js';
 import {
   CAM, SECURITY, STATUS, UNITS_PER_M, DESC_FIELDS, MAX_PICTOS, loadLayer, saveLayer, emptyLayer, importLayer,
   snapDoor, roomAt, containerRects, camHandle, roomDoors, roomCams,
@@ -30,6 +30,7 @@ const TOOLS = [
   { id: 'room', key: '5', label: 'RAUM', hint: 'Raum anklicken: rechts ID, Name, Bereich, Status und Notiz bearbeiten · Raumbeschreibung öffnen' },
   { id: 'erase', key: '6', label: 'RADIERER', hint: 'Tür, Linie oder Kamera anklicken zum Löschen' },
   { id: 'picto', key: '7', label: 'PIKTOGRAMM', hint: 'Piktogramm links auswählen, dann in einen Raum klicken (höchstens 5 pro Raum)' },
+  { id: 'label', key: '8', label: 'BESCHRIFTUNG', hint: 'Klicken, um eine neue Beschriftung zu setzen · vorhandene Beschriftungen mit dem Auswahl-Werkzeug anklicken, ändern und verschieben' },
 ];
 
 const st = {
@@ -80,7 +81,7 @@ function updateButtons() {
   $('#redo').disabled = !st.redo.length;
 }
 function validateSel() {
-  if (st.sel && st.sel.kind !== 'room' && !find(st.sel.kind, st.sel.id)) st.sel = null;
+  if (st.sel && !['room', 'lift'].includes(st.sel.kind) && !find(st.sel.kind, st.sel.id)) st.sel = null;
 }
 
 const roomById = (id) => level.rooms.find((r) => r.id === id);
@@ -100,9 +101,21 @@ function patchLift(id, patch) {
 }
 
 const listOf = (kind) => ({ door: layer.doors, line: layer.lines, cam: layer.cams }[kind]);
-const find = (kind, id) => listOf(kind)?.find((o) => o.id === id);
+const find = (kind, id) => (kind === 'label' ? planLabels(level, layer).find((l) => l.id === id) : listOf(kind)?.find((o) => o.id === id));
+function patchLabel(id, patch) {
+  layer.labels[id] = { ...(layer.labels[id] || {}), ...patch };
+}
 
 function remove(kind, id) {
+  if (kind === 'label') {
+    snapshot();
+    if (layer.labels[id]?.custom) delete layer.labels[id];
+    else patchLabel(id, { hidden: true });
+    if (st.sel?.id === id) st.sel = null;
+    commit();
+    renderProps();
+    return;
+  }
   const list = listOf(kind);
   const i = list.findIndex((o) => o.id === id);
   if (i < 0) return;
@@ -127,7 +140,7 @@ function toast(text) {
 function setVB(r) {
   st.vb = r;
   svg.setAttribute('viewBox', `${r.x} ${r.y} ${r.w} ${r.h}`);
-  svg.style.setProperty('--k', (r.w / (svg.clientWidth || 1000)).toFixed(4));
+  applyZoom(svg, r.w / (svg.clientWidth || 1000));
 }
 
 function homeView() {
@@ -229,7 +242,18 @@ function renderProps() {
         <span class="sec-t sec-red">ROT</span> – Vollzugriff</p>`;
     return;
   }
-  if (sel.kind === 'door') {
+  if (sel.kind === 'label') {
+    const l = find('label', sel.id);
+    props.innerHTML = `
+      <h3>BESCHRIFTUNG</h3>
+      <label class="ed-field">TEXT <input type="text" data-lt maxlength="60" value="${esc(l.text)}"></label>
+      <div class="ed-btns"><button class="danger" data-del>BESCHRIFTUNG LÖSCHEN</button>${layer.labels[l.id] && !layer.labels[l.id].custom ? '<button data-lreset>ORIGINAL WIEDERHERSTELLEN</button>' : ''}</div>
+      <p class="ed-note">Mit dem Auswahl-Werkzeug ziehen, um die Beschriftung zu verschieben. Neue Beschriftungen setzt das Werkzeug 8.</p>`;
+    const inp = props.querySelector('[data-lt]');
+    inp.addEventListener('focus', snapshot);
+    inp.addEventListener('input', () => { patchLabel(l.id, { text: inp.value }); commit(); });
+    props.querySelector('[data-lreset]')?.addEventListener('click', () => { snapshot(); delete layer.labels[l.id]; commit(); renderProps(); });
+  } else if (sel.kind === 'door') {
     const d = find('door', sel.id);
     props.innerHTML = `
       <h3>TÜR</h3>
@@ -446,6 +470,18 @@ function onDown(e) {
     const room = roomAt(level, pt.x, pt.y);
     if (room) select({ kind: 'room', id: room.id });
     else toast('KEIN RAUM AN DIESER STELLE');
+    return;
+  }
+  if (st.tool === 'label') {
+    const obj = objectAt(e);
+    if (obj?.kind === 'label') { select(obj); return; }
+    snapshot();
+    const id = uid('lbl');
+    layer.labels[id] = { custom: true, text: 'NEUER BEREICH', x: Math.round(pt.x), y: Math.round(pt.y) };
+    st.sel = { kind: 'label', id };
+    commit();
+    renderProps();
+    props.querySelector('[data-lt]')?.select();
     return;
   }
   if (st.tool === 'picto') {
@@ -691,7 +727,9 @@ function onMove(e) {
       d.moved = true;
       snapshot();
     }
-    if (st.sel.kind === 'door') {
+    if (st.sel.kind === 'label') {
+      patchLabel(st.sel.id, { x: Math.round(orig.x + pt.x - d.start.x), y: Math.round(orig.y + pt.y - d.start.y) });
+    } else if (st.sel.kind === 'door') {
       const s = snapDoor(level, pt.x, pt.y);
       if (s) Object.assign(obj, s);
     } else if (st.sel.kind === 'cam') {
@@ -769,23 +807,30 @@ function roomListBlocks() {
   for (const e of roomEntries()) {
     if (e.zone !== zone) { zone = e.zone; blocks.push({ h: 2, text: zone }); }
     blocks.push({ h: 3, text: `${e.code} – ${e.name}` });
+    const dash = (v) => (v && String(v).trim() ? v : '–');
+    blocks.push({ kv: ['Raum-ID', e.code] });
+    blocks.push({ kv: ['Name', e.name] });
+    blocks.push({ kv: ['Bereich', e.zone] });
+    blocks.push({ kv: ['Ebene', level.name] });
     blocks.push({ kv: ['Status', STATUS[e.d.status || '']] });
     blocks.push({ kv: ['Türen', e.doors] });
     blocks.push({ kv: ['Kameras', String(e.cams)] });
-    if (e.d.picto?.length) blocks.push({ kv: ['Piktogramme', e.d.picto.map((p) => `${semioticById(p.id)?.name}${p.map ? ' (Karte)' : ''}`).join(', ')] });
-    if (e.d.info) blocks.push({ kv: ['Notiz (Terminal)', e.d.info] });
-    for (const [k, label] of DESC_FIELDS) if (e.d[k]) blocks.push({ kv: [DESC_LABELS[k] || label, e.d[k]] });
+    blocks.push({ kv: ['Piktogramme', e.d.picto?.length ? e.d.picto.map((p) => `${semioticById(p.id)?.name}${p.map ? ' (auf der Karte)' : ''}`).join(', ') : '–'] });
+    blocks.push({ kv: ['Notiz (Terminal)', dash(e.d.info)] });
+    for (const [k, label] of DESC_FIELDS) blocks.push({ kv: [DESC_LABELS[k] || label, dash(e.d[k])] });
     if (e.d.items?.length) {
-      blocks.push({ p: 'Gegenstände:', bold: true });
+      blocks.push({ p: 'Was für Gegenstände findet man:', bold: true });
       blocks.push({ list: e.d.items.map((it) => `${it.qty ? `${it.qty}× ` : ''}${it.name}${it.note ? ` – ${it.note}` : ''}`) });
+    } else {
+      blocks.push({ kv: ['Was für Gegenstände findet man', '–'] });
     }
   }
   blocks.push({ h: 2, text: 'AUFZÜGE' });
   for (const l of level.lifts) {
     const d = liftData(l, layer);
-    blocks.push({ h: 3, text: `Aufzug ${d.letter || l.id}` });
+    blocks.push({ h: 3, text: `Aufzug ${d.letter || (l.id === 'MF' ? '(klein, Administration)' : l.id)}` });
     blocks.push({ kv: ['Sicherheitsstufe', d.sec ? SECURITY[d.sec].label : '–'] });
-    if (d.access) blocks.push({ kv: ['Zugang zu', d.access] });
+    blocks.push({ kv: ['Zugang zu', d.access || '–'] });
   }
   return blocks;
 }

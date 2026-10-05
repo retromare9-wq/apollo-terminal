@@ -73,6 +73,9 @@ export const SEMIOTIC = [
     svg: `${frame()}<rect x="22" y="22" width="56" height="56" fill="${G}"/><rect x="34" y="34" width="32" height="32" fill="${L}"/><rect x="40" y="40" width="20" height="20" fill="${G}"/>` },
   { id: 31, name: 'STORAGE (ORGANIC)', de: 'Lager (organisch)',
     svg: `${frame()}<rect x="22" y="22" width="56" height="56" fill="${G}"/><rect x="34" y="34" width="32" height="32" fill="${N}"/>` },
+  // Ergänzung im Stil des Standards: Aufzug (Doppelpfeil auf/ab)
+  { id: 32, name: 'ELEVATOR', de: 'Aufzug',
+    svg: `${frame()}<rect x="22" y="22" width="56" height="56" fill="${B}"/><path d="M50 26 L66 44 H56 V56 H66 L50 74 L34 56 H44 V44 H34 Z" fill="${L}"/>` },
 ];
 
 export const semioticById = (id) => SEMIOTIC.find((s) => s.id === Number(id));

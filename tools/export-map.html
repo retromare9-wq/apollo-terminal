@@ -28,6 +28,7 @@
   import { drawStationPlan } from '../js/stationplan.js';
   import { loadLayer } from '../js/layer.js';
   import { el } from '../js/svg.js';
+  import { semioticById } from '../js/semiotic.js';
 
   const gm = new URLSearchParams(location.search).has('gm');
   const lv = STATION.levels[0];
@@ -42,6 +43,7 @@
   svg.setAttribute('viewBox', `${vb.x} ${vb.y} ${vb.w} ${vb.h}`);
   svg.style.height = `${(3600 * vb.h) / vb.w}px`;
   svg.style.setProperty('--k', ((vb.w / 3600) * 2.4).toFixed(4));
+  svg.classList.remove('z-mid', 'z-far');
 
   document.getElementById('title').textContent = `${CONFIG.station} // ${level.name}`;
   document.getElementById('sub').textContent =
@@ -54,7 +56,7 @@
     [sw('<rect x="2" y="2" width="66" height="30" fill="#561a10"/><rect x="30" y="2" width="9" height="30" fill="#e8912d"/>'), 'TÜR ORANGE'],
     [sw('<rect x="2" y="2" width="66" height="30" fill="#561a10"/><rect x="30" y="2" width="9" height="30" fill="#e0442c"/>'), 'TÜR ROT'],
     [sw('<line x1="4" y1="17" x2="66" y2="17" stroke="#8d8680" stroke-width="2"/>'), 'TRENNLINIE'],
-    [sw('<rect x="2" y="2" width="33" height="30" fill="#e3cb5c"/><path d="M8 8 L29 26 M29 8 L8 26" stroke="#1a0e05" stroke-width="2"/><rect x="35" y="2" width="33" height="30" fill="#0f0806" stroke="#7d5421"/><path d="M43 4 v26 M51 4 v26 M59 4 v26" stroke="#7d5421"/>'), 'AUFZUG + LEITERGANG'],
+    [sw(`<g transform="translate(3 2) scale(.3)">${semioticById(32).svg}</g><g transform="translate(35 2) scale(.3)">${semioticById(28).svg}</g><rect x="2" y="1" width="66" height="32" fill="none" stroke="#3d63ff" stroke-width="2"/>`), 'AUFZUG + LEITERGANG'],
     ...(gm ? [[sw('<path d="M10 17 L60 2 A52 52 0 0 1 60 32 Z" fill="#6cc495" fill-opacity=".3"/><circle cx="10" cy="17" r="6" fill="#6cc495"/>'), 'KAMERA']] : []),
   ].map(([s, t]) => `<span>${s}${t}</span>`).join('');
   document.body.dataset.ready = '1';

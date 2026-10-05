@@ -260,7 +260,7 @@ function showMap(topic) {
     sound,
     onLevel: (i, info) => {
       setTitle(info.title, `R${i + 1} ◂`);
-      if (info.plan) setHint('←→ RAUM WÄHLEN · RAUM-ID+⏎ · ↑ ZURÜCK · ESC MENÜ');
+      if (info.plan) setHint('←→ RAUM · ID+⏎ · STRG+PFEILE BEWEGEN · +/# ZOOM · ESC');
       else setHint(info.next ? `A+⏎ ${info.next} · ↑ ZURÜCK · ESC MENÜ` : '↑ ZURÜCK · ESC MENÜ');
     },
   });
@@ -491,6 +491,19 @@ function onKey(e) {
     e.preventDefault();
     const on = document.body.classList.toggle('retro');
     try { localStorage.setItem('apollo.retro', on ? '1' : ''); } catch { /* egal */ }
+    return;
+  }
+  const onPlan = state.view === 'map' && state.map?.info?.plan && !state.map.animating;
+  if (onPlan && e.ctrlKey && e.key.startsWith('Arrow')) {
+    e.preventDefault();
+    const d = { ArrowLeft: [-0.2, 0], ArrowRight: [0.2, 0], ArrowUp: [0, -0.2], ArrowDown: [0, 0.2] }[e.key];
+    state.map.panBy(d[0], d[1]);
+    return;
+  }
+  if (onPlan && !e.ctrlKey && !e.altKey && (e.key === '+' || e.key === '#' || e.key === '-')) {
+    e.preventDefault();
+    state.map.zoomBy(e.key === '+' ? 0.75 : 1 / 0.75);
+    sound.tick();
     return;
   }
   if (e.ctrlKey || e.metaKey || e.altKey) return;

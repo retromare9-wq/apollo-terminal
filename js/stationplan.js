@@ -19,7 +19,15 @@ export function roomName(level, room, layer) {
 
 export const roomCode = (room, layer) => layer?.rooms?.[room.id]?.code || room.id;
 export const roomZone = (level, room, layer) => layer?.rooms?.[room.id]?.zoneName || level.zones[room.zone] || room.zone.toUpperCase();
-export const liftData = (l, layer) => ({ letter: l.id, sec: '', access: '', ...(layer?.lifts?.[l.id] || {}) });
+export const liftData = (l, layer) => ({ letter: l.id === 'MF' ? '' : l.id, sec: '', access: '', ...(layer?.lifts?.[l.id] || {}) });
+
+// Schrift skaliert beim Herauszoomen mit und verschwindet bei großer Entfernung.
+// k = Karteneinheiten pro Bildschirmpixel
+export function applyZoom(svg, k) {
+  svg.style.setProperty('--k', k.toFixed(4));
+  svg.classList.toggle('z-far', k > 6.5);
+  svg.classList.toggle('z-mid', k > 4.6);
+}
 
 export function bbox(rects) {
   return rects.reduce((b, r) => [Math.min(b[0], r[0]), Math.min(b[1], r[1]), Math.max(b[2], r[2]), Math.max(b[3], r[3])],
@@ -37,34 +45,41 @@ export function frame(b, pad) {
   return { x: cx - w / 2, y: cy - h / 2, w, h };
 }
 
+// Aufzug: Kasten blau umrandet, darin Aufzugs- und Leitergang-Piktogramm
 function lift(g, l, layer) {
   const data = liftData(l, layer);
   const [x0, y0, x1, y1] = l.rect;
-  const horizontal = l.dark === 'dl' || l.dark === 'dr';
-  const mx = (x0 + x1) / 2;
-  const my = (y0 + y1) / 2;
-  const car = { dl: [x0, y0, mx, y1], dr: [mx, y0, x1, y1], dt: [x0, y0, x1, my], db: [x0, my, x1, y1] }[l.dark];
-  const shaft = { dl: [mx, y0, x1, y1], dr: [x0, y0, mx, y1], dt: [x0, my, x1, y1], db: [x0, y0, x1, my] }[l.dark];
+  const horizontal = x1 - x0 >= y1 - y0;
+  const size = horizontal ? y1 - y0 : x1 - x0;
+  const liftFirst = l.dark === 'dl' || l.dark === 'dt';
   const lg = el('g', { class: `st-lift${data.sec ? ` sec-${data.sec}` : ''}`, 'data-lift': l.id }, g);
-  el('rect', { x: shaft[0], y: shaft[1], width: shaft[2] - shaft[0], height: shaft[3] - shaft[1], class: 'st-shaft' }, lg);
-  // Leitersprossen im Leitergang
-  for (let i = 1; i < 4; i++) {
-    if (horizontal) {
-      const x = shaft[0] + ((shaft[2] - shaft[0]) * i) / 4;
-      el('line', { x1: x, y1: shaft[1] + 4, x2: x, y2: shaft[3] - 4, class: 'st-rung' }, lg);
-    } else {
-      const y = shaft[1] + ((shaft[3] - shaft[1]) * i) / 4;
-      el('line', { x1: shaft[0] + 4, y1: y, x2: shaft[2] - 4, y2: y, class: 'st-rung' }, lg);
-    }
-  }
-  el('rect', { x: car[0], y: car[1], width: car[2] - car[0], height: car[3] - car[1], class: 'st-car' }, lg);
-  el('path', { d: `M${car[0] + 6} ${car[1] + 6} L${car[2] - 6} ${car[3] - 6} M${car[2] - 6} ${car[1] + 6} L${car[0] + 6} ${car[3] - 6}`, class: 'st-cross' }, lg);
+  el('rect', { x: x0, y: y0, width: x1 - x0, height: y1 - y0, class: 'st-liftbg' }, lg);
+  const icons = liftFirst ? [32, 28] : [28, 32];
+  icons.forEach((id, i) => {
+    const ox = horizontal ? x0 + i * size : x0;
+    const oy = horizontal ? y0 : y0 + i * size;
+    const ig = el('g', { transform: `translate(${ox + size * 0.04} ${oy + size * 0.04}) scale(${(size * 0.92) / 100})` }, lg);
+    ig.innerHTML = semioticById(id).svg;
+  });
+  el('rect', { x: x0, y: y0, width: x1 - x0, height: y1 - y0, class: 'st-liftframe' }, lg);
   if (data.letter) {
     const lx = horizontal ? x0 - 10 : (x0 + x1) / 2;
     const ly = horizontal ? (y0 + y1) / 2 : y0 - 12;
-    const name = l.id === 'MF' && data.letter === 'MF' ? 'MAINFRAME ▼ -1' : data.letter;
-    txt(g, lx, ly, name, 'st-liftid', { 'text-anchor': horizontal ? 'end' : 'middle', 'dominant-baseline': horizontal ? 'middle' : 'auto' });
+    txt(g, lx, ly, data.letter, 'st-liftid lbl', { 'text-anchor': horizontal ? 'end' : 'middle', 'dominant-baseline': horizontal ? 'middle' : 'auto' });
   }
+}
+
+// Bereichsüberschriften: Vorgabe aus dem Grundriss, überschrieben/ergänzt durch den Editor
+export function planLabels(level, layer) {
+  const exit = level.corridors.reduce((m, c) => (c[2] > m[2] ? c : m));
+  const base = [
+    ...level.labels.map((l, i) => ({ id: `lbl${i}`, text: l.text, x: l.x, y: l.y })),
+    { id: 'lbl-exit', text: 'ZUM FLUGFELD ▶', x: exit[2] + 30, y: (exit[1] + exit[3]) / 2 },
+  ];
+  const over = layer?.labels || {};
+  const out = base.map((l) => ({ ...l, ...(over[l.id] || {}) }));
+  for (const [id, l] of Object.entries(over)) if (l.custom) out.push({ id, ...l });
+  return out.filter((l) => !l.hidden && l.text);
 }
 
 // layer: editierbare Ebene (Türen, Linien, Kameras, Raumdaten), opts: { cams, editor }
@@ -103,7 +118,7 @@ export function drawStationPlan(g, cfg, level, layer, opts = {}) {
     const label = custom || room.label;
     if (label) {
       const big = label.length > 3;
-      txt(labelLayer, b[0] + 8, b[1] + 8, label.toUpperCase(), big ? 'st-name' : 'st-num', { 'dominant-baseline': 'hanging' });
+      txt(labelLayer, b[0] + 8, b[1] + 8, label.toUpperCase(), `${big ? 'st-name' : 'st-num'} rlbl`, { 'dominant-baseline': 'hanging' });
     }
     const pics = (layer.rooms[room.id]?.picto || []).filter((p) => p.map).slice(0, 5);
     if (pics.length) {
@@ -121,13 +136,11 @@ export function drawStationPlan(g, cfg, level, layer, opts = {}) {
       txt(labelLayer, (b[0] + b[2]) / 2, (b[1] + b[3]) / 2, sym, `st-mark s-${status}`, { 'text-anchor': 'middle', 'dominant-baseline': 'middle' });
     }
   });
-  level.labels.forEach((l) => {
-    const cls = /^[a-z]$/.test(l.text) ? 'st-row' : l.text.startsWith('LEVEL') ? 'st-level' : 'st-zone';
-    txt(labelLayer, l.x, l.y, l.text, cls, { 'dominant-baseline': 'middle' });
+  const labelNodes = {};
+  planLabels(level, layer).forEach((l) => {
+    const cls = /^[a-z]$/.test(l.text) ? 'st-row' : /^LEVEL/.test(l.text) ? 'st-level' : 'st-zone';
+    labelNodes[l.id] = txt(labelLayer, l.x, l.y, l.text, `${cls} lbl`, { 'dominant-baseline': 'middle', 'data-oid': l.id, 'data-kind': 'label' });
   });
-  // Ausgang zum Flugfeld
-  const exit = level.corridors.reduce((m, c) => (c[2] > m[2] ? c : m));
-  txt(labelLayer, exit[2] + 30, (exit[1] + exit[3]) / 2, 'ZUM FLUGFELD ▶', 'st-zone', { 'dominant-baseline': 'middle' });
 
   const home = frame([bx0, by0, bx1, by1], 90);
   return {
@@ -135,6 +148,6 @@ export function drawStationPlan(g, cfg, level, layer, opts = {}) {
     target: { x: home.x + home.w / 2, y: home.y + home.h / 2 },
     home,
     noLock: true,
-    plan: { level, layer, nodes, objects },
+    plan: { level, layer, nodes, objects: { ...objects, ...labelNodes } },
   };
 }

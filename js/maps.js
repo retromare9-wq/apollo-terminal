@@ -4,7 +4,7 @@
 
 import { el, txt, rng } from './svg.js';
 import { drawStarmap, SOL } from './starmap.js';
-import { drawStationPlan, roomName, roomCode, roomZone, frame } from './stationplan.js';
+import { drawStationPlan, roomName, roomCode, roomZone, frame, applyZoom } from './stationplan.js';
 import { semioticSvg } from './semiotic.js';
 import { loadLayer, roomDoors, roomCams, SECURITY } from './layer.js';
 
@@ -172,7 +172,7 @@ export class MapView {
     this.vb = r;
     this.svg.setAttribute('viewBox', `${r.x} ${r.y} ${r.w} ${r.h}`);
     // Einheiten pro Bildschirmpixel – für gleichbleibende Schriftgrößen im Stationsplan
-    this.svg.style.setProperty('--k', (r.w / (this.svg.clientWidth || 1214)).toFixed(4));
+    applyZoom(this.svg, r.w / (this.svg.clientWidth || 1214));
   }
 
   setState(s) { this.root.querySelector('.hud-state').textContent = s; }
@@ -347,13 +347,42 @@ export class MapView {
   }
 
   findRoom(query) {
-    const norm = (s) => s.toUpperCase().replace(/[^A-Z0-9ÄÖÜ.]+/g, ' ').trim();
+    const norm = (t) => String(t).toUpperCase().replace(/[^A-Z0-9ÄÖÜ.]+/g, ' ').trim();
     const q = norm(query);
     if (!q) return -1;
-    const level = this.info.plan.level;
-    return this.rooms().findIndex((r) => norm(r.id) === q || norm(roomCode(r, this.info.plan.layer)) === q || norm(roomName(level, r, this.info.plan.layer)) === q
+    const { level, layer } = this.info.plan;
+    const list = this.rooms();
+    const exact = list.findIndex((r) => norm(r.id) === q || norm(roomCode(r, layer)) === q || norm(roomName(level, r, layer)) === q
       || norm(r.id.replace('-', ' ')) === q || (r.unit && norm(r.unit) === q));
+    if (exact >= 0) return exact;
+    // Nur die Abteilung angegeben (z. B. XENO, MED, WOHN-A oder XENOBIOLOGIE): erster Raum dieser Abteilung
+    const dept = (r) => norm(roomCode(r, layer).split('-')[0]);
+    const hits = list.map((r, i) => ({ r, i })).filter(({ r }) => dept(r) === q || norm(roomZone(level, r, layer)) === q
+      || norm(roomCode(r, layer)).startsWith(q));
+    if (!hits.length) return -1;
+    hits.sort((a, b) => roomCode(a.r, layer).localeCompare(roomCode(b.r, layer), 'de', { numeric: true }));
+    return hits[0].i;
   }
+
+  // Freie Navigation im Stationsplan (Strg+Pfeile, + / #)
+  panBy(fx, fy) {
+    if (!this.info?.plan || this.animating) return;
+    const r = this.vb || this.home;
+    const tok = ++this.token;
+    this.zoomTo(r, { ...r, x: r.x + r.w * fx, y: r.y + r.h * fy }, 160, easeOut, tok);
+  }
+
+  zoomBy(f) {
+    if (!this.info?.plan || this.animating) return;
+    const r = this.vb || this.home;
+    const w = Math.min(Math.max(r.w * f, 250), this.home.w * 1.5);
+    const k = w / r.w;
+    const cx = r.x + r.w / 2;
+    const cy = r.y + r.h / 2;
+    const tok = ++this.token;
+    this.zoomTo(r, { x: cx - (r.w * k) / 2, y: cy - (r.h * k) / 2, w: r.w * k, h: r.h * k }, 200, easeOut, tok);
+  }
+
 
   async focusRoom(i) {
     const room = this.rooms()[i];

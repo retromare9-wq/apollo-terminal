@@ -316,12 +316,12 @@ body.crt .crt-overlay::after {
 .st-rung { stroke: var(--amber-dim); stroke-width: 1; }
 .st-car { fill: var(--yellow); stroke: var(--yellow); stroke-width: 1; }
 .st-cross { stroke: var(--ink); stroke-width: 1.2; }
-.st-liftid { fill: var(--yellow); font-weight: 700; font-size: calc(var(--k, 1) * 15px); }
-.st-num { fill: var(--amber); font-weight: 700; font-size: calc(var(--k, 1) * 10px); }
-.st-name { fill: var(--amber); font-weight: 700; font-size: calc(var(--k, 1) * 9px); }
-.st-zone { fill: var(--amber); font-weight: 700; letter-spacing: .12em; font-size: calc(var(--k, 1) * 12px); }
-.st-row { fill: var(--amber-dim); font-weight: 700; font-size: calc(var(--k, 1) * 12px); }
-.st-level { fill: var(--yellow); font-weight: 700; letter-spacing: .2em; font-size: calc(var(--k, 1) * 16px); }
+.st-liftid { fill: var(--yellow); font-weight: 700; font-size: min(calc(var(--k, 1) * 15px), 40px); }
+.st-num { fill: var(--amber); font-weight: 700; font-size: min(calc(var(--k, 1) * 10px), 20px); }
+.st-name { fill: var(--amber); font-weight: 700; font-size: min(calc(var(--k, 1) * 9px), 17px); }
+.st-zone { fill: var(--amber); font-weight: 700; letter-spacing: .12em; font-size: min(calc(var(--k, 1) * 12px), 30px); }
+.st-row { fill: var(--amber-dim); font-weight: 700; font-size: min(calc(var(--k, 1) * 12px), 30px); }
+.st-level { fill: var(--yellow); font-weight: 700; letter-spacing: .2em; font-size: min(calc(var(--k, 1) * 16px), 46px); }
 .st-scale { fill: none; stroke: var(--amber); stroke-width: 1.5; }
 .st-mark { font-weight: 700; font-size: calc(var(--k, 1) * 13px); }
 .st-mark.s-warn { fill: var(--yellow); }
@@ -350,9 +350,6 @@ body.crt .crt-overlay::after {
 .sec-t.sec-green { color: var(--sec-green); }
 .sec-t.sec-orange { color: var(--sec-orange); }
 .sec-t.sec-red { color: var(--sec-red); }
-.st-lift.sec-green .st-car { stroke: var(--sec-green); stroke-width: 3; }
-.st-lift.sec-orange .st-car { stroke: var(--sec-orange); stroke-width: 3; }
-.st-lift.sec-red .st-car { stroke: var(--sec-red); stroke-width: 3; }
 .st-picto { pointer-events: none; }
 .sp-pics { display: flex; gap: 6px; flex-wrap: wrap; margin: 8px 0 2px; }
 
@@ -369,3 +366,15 @@ body.retro.crt .crt-overlay {
 }
 body.retro.crt .screen { text-shadow: 0 0 2px rgba(255, 110, 40, .9), 0 0 9px rgba(226, 70, 30, .45); }
 body.retro .cursor { animation-duration: .6s; }
+
+/* Aufzüge: Piktogramme im blau umrandeten Kasten */
+.st-liftbg { fill: #0a0604; }
+.st-liftframe { fill: none; stroke: #3d63ff; stroke-width: 3; }
+.st-lift.sec-green .st-liftframe { stroke-dasharray: none; }
+.st-lift.sec-green .st-liftbg, .st-lift.sec-orange .st-liftbg, .st-lift.sec-red .st-liftbg { stroke-width: 7; }
+.st-lift.sec-green .st-liftbg { stroke: var(--sec-green); }
+.st-lift.sec-orange .st-liftbg { stroke: var(--sec-orange); }
+.st-lift.sec-red .st-liftbg { stroke: var(--sec-red); }
+/* Weit herausgezoomt: Raumnummern weg; ganz weit: alle Schrift weg */
+svg.z-mid .rlbl, svg.z-mid .st-picto { display: none; }
+svg.z-far .lbl, svg.z-far .st-mark { display: none; }

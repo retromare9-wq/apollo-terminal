@@ -111,3 +111,6 @@ line.ed-sel { stroke: var(--yellow); }
 .ed-search { margin-bottom: 10px; }
 .ed-dcol textarea { min-height: 70px; }
 .editor .st-lift.ed-sel .st-car { stroke: var(--yellow); stroke-width: 4; }
+
+.editor .lbl[data-oid] { cursor: move; }
+.editor text.ed-sel { fill: var(--yellow); }
