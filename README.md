@@ -35,7 +35,7 @@ Im Selbstzerstörungs-Fenster bricht `ABBRUCH` (danach Code) ab; neu laden setzt
 |---|---|
 | Frage eintippen + Enter | Freie Anfrage, z. B. „Gibt es Schäden?“ |
 | Buchstabe + Enter | Menüpunkt direkt wählen |
-| ↑ ↓ | Auswahl im Menü bzw. Interkom; auf Karten: eine Ebene zurück / tiefer |
+| ↑ ↓ | Auswahl im Menü bzw. Interkomm; auf Karten: eine Ebene zurück / tiefer |
 | A + Enter (Karte) | Zum markierten Ziel zoomen: Sternenkarte → System → Mond → Station |
 | Enter (leer) | Ausgewählten Punkt öffnen bzw. Textausgabe überspringen |
 | Esc | Zurück / Verbindung trennen |
