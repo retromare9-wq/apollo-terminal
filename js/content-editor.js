@@ -49,6 +49,25 @@ const note = (t) => `<p class="ed-note">${t}</p>`;
 const del = (path) => `<button class="danger ed-x" data-del="${path}" title="Entfernen">✕</button>`;
 const add = (path, tpl, text = '+ HINZUFÜGEN') => `<button data-add="${path}" data-tpl='${esc(JSON.stringify(tpl))}'>${text}</button>`;
 
+// Bild auf höchstens 320 px verkleinern und als JPEG-Daten speichern (passt in den Browser-Speicher)
+function shrinkImage(file, max = 320) {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      const k = Math.min(1, max / Math.max(img.width, img.height));
+      const cv = document.createElement('canvas');
+      cv.width = Math.round(img.width * k);
+      cv.height = Math.round(img.height * k);
+      cv.getContext('2d').drawImage(img, 0, 0, cv.width, cv.height);
+      URL.revokeObjectURL(url);
+      resolve(cv.toDataURL('image/jpeg', 0.85));
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); reject(); };
+    img.src = url;
+  });
+}
+
 export function createContentEditor(root, { level, getLayer, setRoomStatus, toast }) {
   let c = currentContent();
   let tab = 'general';
@@ -247,7 +266,11 @@ export function createContentEditor(root, { level, getLayer, setRoomStatus, toas
             <button data-move="personnel.${i}" data-dir="-1">↑</button><button data-move="personnel.${i}" data-dir="1">↓</button>
             ${del(`personnel.${i}`)}
           </div>
-          ${input('PROFILBILD (PFAD ODER LINK, OPTIONAL)', `personnel.${i}.image`)}
+          <div class="ed-crow ed-imgrow">
+            <div class="ed-thumb">${p.image ? `<img src="${esc(p.image)}" alt="">` : '<span class="dim">KEIN BILD</span>'}</div>
+            <button data-upload="${i}">BILD HOCHLADEN …</button>
+            ${p.image ? `<button class="danger" data-noimg="${i}">BILD ENTFERNEN</button>` : ''}
+          </div>
         </div>`).join('')}
         <div class="ed-btns">${add('personnel', { name: 'NEUE PERSON', role: '', location: '', available: true, image: '' })}</div>
       </section>`,
@@ -309,6 +332,26 @@ export function createContentEditor(root, { level, getLayer, setRoomStatus, toas
       if (j < 0 || j >= list.length) return;
       [list[i], list[j]] = [list[j], list[i]];
       save();
+      render();
+    }));
+    root.querySelectorAll('[data-upload]').forEach((b) => b.addEventListener('click', () => {
+      const f = document.createElement('input');
+      f.type = 'file';
+      f.accept = 'image/*';
+      f.onchange = async () => {
+        if (!f.files[0]) return;
+        try {
+          c.personnel[Number(b.dataset.upload)].image = await shrinkImage(f.files[0]);
+          saveContent(c);
+          render();
+          toast('BILD GESPEICHERT');
+        } catch { toast('BILD KONNTE NICHT GELESEN WERDEN'); }
+      };
+      f.click();
+    }));
+    root.querySelectorAll('[data-noimg]').forEach((b) => b.addEventListener('click', () => {
+      c.personnel[Number(b.dataset.noimg)].image = '';
+      saveContent(c);
       render();
     }));
     root.querySelectorAll('[data-topic]').forEach((b) => b.addEventListener('click', () => { topicIdx = Number(b.dataset.topic); render(); }));
