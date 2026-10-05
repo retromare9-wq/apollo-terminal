@@ -6,17 +6,19 @@ import { STARMAP } from './starmap-data.js';
 
 const esc = (t) => String(t ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
+// Reihenfolge der Reiter im Editor ('map' = Karten-Editor des Stationsplans)
 export const CONTENT_TABS = [
   ['general', 'ALLGEMEIN'],
-  ['stars', 'STERNENKARTE'],
-  ['system', 'SYSTEMKARTE'],
-  ['moon', 'MONDKARTE'],
-  ['damage', 'SCHADENSBERICHT'],
-  ['reports', 'BERICHTE'],
   ['menu', 'MENÜ'],
+  ['map', 'STATION'],
+  ['stars', 'STERN'],
+  ['system', 'SYSTEM'],
+  ['moon', 'MOND'],
+  ['damage', 'SCHÄDEN'],
+  ['reports', 'BERICHTE'],
   ['people', 'PERSONAL'],
   ['commlog', 'KOMMLOG'],
-  ['systems', 'STATIONSSYSTEME'],
+  ['systems', 'SYSTEME'],
   ['selfdestruct', 'SELBSTZERSTÖRUNG'],
 ];
 
@@ -134,7 +136,7 @@ export function createContentEditor(root, { level, getLayer, setRoomStatus, toas
           <div class="ed-btns">${add('config.readouts', { label: 'NEU', value: '', state: '' })}</div>
           ${head('STARTSEQUENZ')}
           ${area('ZEILEN DES SYSTEMCHECKS', 'config.boot', 'lines', 14, 'eine Zeile pro Meldung')}
-          ${head('INTERKOM')}
+          ${head('INTERKOMM')}
           ${area('SIMULIERTE ANTWORTEN', 'replies', 'lines', 5, '{name} = Name der Person')}
         </section>
       </div>`,
@@ -258,24 +260,52 @@ export function createContentEditor(root, { level, getLayer, setRoomStatus, toas
       if (topicIdx >= c.topics.length) topicIdx = 0;
       const t = c.topics[topicIdx];
       const base = `topics.${topicIdx}`;
+      const kind = { report: '', damage: '· SCHADEN', map: '· KARTE', interkom: '· INTERKOMM', help: '· HILFE', commlog: '· KOMMLOG', systems: '· SYSTEME', selfdestruct: '· SELBSTZERSTÖRUNG' };
+      const infos = t.infos || [];
       return `
       <div class="ed-cgrid wide-right">
         <section>
           ${head('KATEGORIEN')}
-          <div class="ed-tlist">${list.map(({ t: x, i }) => `<button class="ed-tsel ${i === topicIdx ? 'on' : ''}" data-topic="${i}">${esc(x.title || x.id)} <span class="dim">${{ report: '', damage: '· SCHADEN', map: '· KARTE', interkom: '· INTERKOM', help: '· HILFE', commlog: '· KOMMLOG', systems: '· SYSTEME', selfdestruct: '· SELBSTZERSTÖRUNG' }[x.view] || ''}</span></button>`).join('')}</div>
-          <div class="ed-btns">${add('topics', { id: `custom-${Date.now().toString(36)}`, title: 'NEUER BERICHT', view: 'report', example: '', keywords: [], weak: [], blocks: [{ type: 'text', text: '' }] }, '+ NEUER BERICHT')}</div>
-          ${note('Neue Berichte erscheinen über die freie Eingabe (Schlüsselwörter). Ins Hauptmenü kommen sie über den Reiter MENÜ.')}
+          <div class="ed-tlist">${list.map(({ t: x, i }) => `<button class="ed-tsel ${i === topicIdx ? 'on' : ''}" data-topic="${i}">${esc(x.title || x.id)} <span class="dim">${kind[x.view] || ''}${x.infos?.length ? ` · ${x.infos.length} INFO${x.infos.length > 1 ? 'S' : ''}` : ''}</span></button>`).join('')}</div>
+          <div class="ed-btns">${add('topics', { id: `custom-${Date.now().toString(36)}`, title: 'NEUE KATEGORIE', view: 'report', access: 'orange', example: '', keywords: [], weak: [], blocks: [{ type: 'text', text: '' }], infos: [] }, '+ NEUE KATEGORIE')}</div>
+          ${note('<b>So funktioniert die freie Eingabe:</b> Tippt jemand im Terminal eine Frage ein, vergleicht A.P.O.L.L.O. die Wörter mit den Schlüsselwörtern aller Kategorien und aller Infos. Der beste Treffer wird angezeigt. Eine eingetragene Frage, die genau so eingetippt wird, gewinnt immer.')}
+          ${note('<b>Kategorie</b> = Menüpunkt bzw. Themenbereich. Ihr Hauptinhalt erscheint bei allgemeinen Fragen und über das Menü. <b>Infos</b> = zusätzliche Antworten innerhalb einer Kategorie für speziellere Fragen.')}
+          ${note('Neue Kategorien kommen über den Reiter MENÜ ins Hauptmenü.')}
         </section>
         <section>
-          ${head(esc(t.title || t.id))}
-          ${input('TITEL', `${base}.title`)}
-          ${select('ZUGANGSSTUFE', `${base}.access`, ACCESS_OPTS)}
-          ${input('BEISPIELFRAGE FÜR DIE HILFE', `${base}.example`)}
-          ${area('SCHLÜSSELWÖRTER', `${base}.keywords`, 'csv', 3, 'durch Komma getrennt · Wortanfänge reichen')}
-          ${area('SCHWACHE HINWEISE', `${base}.weak`, 'csv', 2, 'zählen weniger')}
-          ${t.view === 'report' ? `${head('INHALT')}${(t.blocks || []).map((b, i) => blockEditor(`${base}.blocks.${i}`, b, i, t.blocks.length)).join('')}
-            <div class="ed-btns">${add(`${base}.blocks`, { type: 'text', text: '' }, '+ BAUSTEIN')}</div>` : note({ damage: 'Den Inhalt bearbeitest du im Reiter SCHADENSBERICHT.', commlog: 'Die Nachrichten bearbeitest du im Reiter KOMMLOG.', systems: 'Die Schaltflächen bearbeitest du im Reiter STATIONSSYSTEME.', selfdestruct: 'Die Texte bearbeitest du im Reiter SELBSTZERSTÖRUNG.' }[t.view] || 'Diese Kategorie öffnet eine Ansicht ohne eigenen Text (Karte, Interkom, Hilfe).')}
-          ${String(t.id).startsWith('custom-') ? `<div class="ed-btns"><button class="danger" data-del="${base}">BERICHT LÖSCHEN</button></div>` : ''}
+          ${head(`KATEGORIE: ${esc(t.title || t.id)}`)}
+          <div class="ed-crow">
+            ${input('TITEL', `${base}.title`)}
+            ${select('ZUGANGSSTUFE', `${base}.access`, ACCESS_OPTS)}
+          </div>
+          ${input('BEISPIELFRAGE (ERSCHEINT IN DER HILFE)', `${base}.example`)}
+          ${area('SCHLÜSSELWÖRTER', `${base}.keywords`, 'csv', 2, 'durch Komma getrennt · Wortanfänge reichen')}
+          ${area('SCHWACHE HINWEISE', `${base}.weak`, 'csv', 1, 'zählen weniger')}
+          ${head('HAUPTINHALT')}
+          ${t.view === 'report' ? `${(t.blocks || []).map((b, i) => blockEditor(`${base}.blocks.${i}`, b, i, t.blocks.length)).join('')}
+            <div class="ed-btns">${add(`${base}.blocks`, { type: 'text', text: '' }, '+ BAUSTEIN')}</div>` : note({ damage: 'Der Hauptinhalt ist der Schadensbericht (Reiter SCHÄDEN).', commlog: 'Der Hauptinhalt ist die Nachrichtenliste (Reiter KOMMLOG).', systems: 'Der Hauptinhalt sind die Schaltflächen (Reiter SYSTEME).', selfdestruct: 'Der Hauptinhalt ist die Selbstzerstörung (Reiter SELBSTZERSTÖRUNG).' }[t.view] || 'Der Hauptinhalt dieser Kategorie ist eine eigene Ansicht (Karte, Interkomm oder Hilfe). Zusätzliche Antworten trägst du unten als Infos ein.')}
+          ${head(`ZUSÄTZLICHE INFOS (${infos.length})`)}
+          ${note('Jede Info hat eigene Fragen und Schlüsselwörter und gibt einen oder mehrere Inhaltsbausteine aus. Beispiel unter PERSONALREGISTER: Info „DR. REYES“ mit der Frage „WER IST DR. REYES?“ und den Schlüsselwörtern „reyes, elena“.')}
+          ${infos.map((inf, k) => {
+            const ib = `${base}.infos.${k}`;
+            return `<div class="ed-info">
+              <div class="ed-crow">
+                ${input(`INFO ${k + 1} – TITEL`, `${ib}.title`)}
+                ${select('ZUGANG', `${ib}.access`, [['', 'WIE KATEGORIE'], ...ACCESS_OPTS])}
+                <button data-move="${ib}" data-dir="-1" ${k === 0 ? 'disabled' : ''}>↑</button><button data-move="${ib}" data-dir="1" ${k === infos.length - 1 ? 'disabled' : ''}>↓</button>
+                ${del(ib)}
+              </div>
+              <div class="ed-crow">
+                ${area('FRAGEN', `${ib}.questions`, 'lines', 2, 'eine Frage pro Zeile')}
+                ${area('SCHLÜSSELWÖRTER', `${ib}.keywords`, 'csv', 2, 'durch Komma getrennt')}
+              </div>
+              <div class="ed-ihead">AUSGABE</div>
+              ${(inf.blocks || []).map((b, i) => blockEditor(`${ib}.blocks.${i}`, b, i, inf.blocks.length)).join('')}
+              <div class="ed-btns">${add(`${ib}.blocks`, { type: 'text', text: '' }, '+ BAUSTEIN')}</div>
+            </div>`;
+          }).join('')}
+          <div class="ed-btns">${add(`${base}.infos`, { title: 'NEUE INFO', access: '', questions: [], keywords: [], blocks: [{ type: 'text', text: '' }] }, '+ INFO HINZUFÜGEN')}</div>
+          ${String(t.id).startsWith('custom-') ? `<div class="ed-btns"><button class="danger" data-del="${base}">KATEGORIE LÖSCHEN</button></div>` : ''}
         </section>
       </div>`;
     },
@@ -300,7 +330,7 @@ export function createContentEditor(root, { level, getLayer, setRoomStatus, toas
 
     people: () => `
       <section class="ed-cone">
-        ${head('STATIONSBEWOHNER (INTERKOM)')}
+        ${head('STATIONSBEWOHNER (INTERKOMM)')}
         ${(c.personnel || []).map((p, i) => `<div class="ed-person">
           <div class="ed-crow">
             ${input('NAME', `personnel.${i}.name`)}
@@ -470,7 +500,8 @@ export function createContentEditor(root, { level, getLayer, setRoomStatus, toas
     });
     if (tab === 'stars') starPreview();
     root.querySelectorAll('[data-add]').forEach((b) => b.addEventListener('click', () => {
-      const list = getPath(c, b.dataset.add);
+      let list = getPath(c, b.dataset.add);
+      if (!Array.isArray(list)) { list = []; setPath(c, b.dataset.add, list); }
       list.push(JSON.parse(b.dataset.tpl));
       if (b.dataset.add === 'topics') topicIdx = list.length - 1;
       save();

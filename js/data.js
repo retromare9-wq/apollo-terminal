@@ -221,7 +221,20 @@ export const TOPICS = [
           ['LENA KOWALSKI', 'LOGISTIK', 'NICHT ERREICHBAR'],
         ],
       },
-      { type: 'text', text: 'KONTAKTAUFNAHME ÜBER INTERKOM.' },
+      { type: 'text', text: 'KONTAKTAUFNAHME ÜBER INTERKOMM.' },
+    ],
+    // Zusätzliche Infos: eigene Fragen/Schlüsselwörter, eigene Ausgabe
+    infos: [
+      {
+        title: 'DR. ELENA REYES',
+        access: '',
+        questions: ['WER IST DR. REYES?', 'WER IST ELENA REYES?'],
+        keywords: ['reyes', 'elena'],
+        blocks: [
+          { type: 'table', head: ['FELD', 'EINTRAG'], rows: [['NAME', 'DR. ELENA REYES'], ['FUNKTION', 'LEITENDE WISSENSCHAFTLERIN'], ['ABTEILUNG', 'XENOBIOLOGIE'], ['AN BORD SEIT', '2180']] },
+          { type: 'text', text: 'PERSONALAKTE: ZUGRIFF AUF WEITERE DATEN NUR MIT FREIGABE DER STATIONSLEITUNG.' },
+        ],
+      },
     ],
   },
   {
@@ -283,11 +296,11 @@ export const TOPICS = [
   },
   {
     id: 'interkom',
-    title: 'INTERKOM',
+    title: 'INTERKOMM',
     view: 'interkom',
     access: 'green',
     example: 'ICH MÖCHTE JEMANDEN ANRUFEN.',
-    keywords: ['interkom', 'intercom', 'anruf', 'rufen', 'kontakt', 'nachricht', 'funk', 'sprechen', 'verbindung',
+    keywords: ['interkomm', 'interkom', 'intercom', 'anruf', 'rufen', 'kontakt', 'nachricht', 'funk', 'sprechen', 'verbindung',
       'erreichen', 'melden', 'schreiben', 'chat'],
     weak: ['reden', 'telefon'],
   },
@@ -339,7 +352,7 @@ export const MENU = [
   { label: 'MONDKARTE TWEX9', topic: 'mond' },
   { label: 'SYSTEMKARTE DS282', topic: 'sonnensystem' },
   { label: 'STERNENKARTE', topic: 'sterne' },
-  { label: 'INTERKOM', topic: 'interkom' },
+  { label: 'INTERKOMM', topic: 'interkom' },
   { label: 'KOMMLOG', topic: 'kommlog' },
   { label: 'ZUGRIFF STATIONSSYSTEME', topic: 'systeme' },
   { label: 'SELBSTZERSTÖRUNG EINLEITEN', topic: 'selbstzerstoerung' },

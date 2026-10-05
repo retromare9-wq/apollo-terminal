@@ -4,7 +4,7 @@
 import { CONFIG, TOPICS, MENU, PERSONNEL, DEMO_REPLIES, COMMLOG, SYSTEMS, SELFDESTRUCT } from './data.js';
 
 export const CONTENT_KEY = 'apollo.content.v1';
-const VERSION = 2;
+const VERSION = 3;
 const clone = (o) => JSON.parse(JSON.stringify(o));
 
 const snapshot = () => ({
@@ -43,6 +43,15 @@ function migrate(c, d) {
     const add = d.menu.filter((m) => !menu.some((x) => x.topic === m.topic));
     const hi = menu.findIndex((m) => m.topic === 'hilfe');
     menu = hi >= 0 ? [...menu.slice(0, hi), ...add, ...menu.slice(hi)] : [...menu, ...add];
+  }
+  // v3: INTERKOM → INTERKOMM
+  if ((c.v || 1) < 3) {
+    const fix = (t) => (typeof t === 'string' ? t.replace(/INTERKOM(?!M)/g, 'INTERKOMM') : t);
+    menu.forEach((m) => { m.label = fix(m.label); });
+    topics.forEach((t) => {
+      t.title = fix(t.title);
+      (t.blocks || []).forEach((b) => { b.text = fix(b.text); });
+    });
   }
   return { topics, menu };
 }

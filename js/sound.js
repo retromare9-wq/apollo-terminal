@@ -128,7 +128,7 @@ export const sound = {
     tone(220, 0.45, { type: 'sine', gain: 0.03, when: 0.26, cutoff: 700 });
   },
 
-  // Interkom-Ruf: pulsierender tiefer Doppelton
+  // Interkomm-Ruf: pulsierender tiefer Doppelton
   ring() {
     for (let i = 0; i < 4; i++) {
       tone(185, 0.09, { type: 'square', gain: 0.035, when: i * 0.11, cutoff: 600 });
@@ -162,3 +162,49 @@ export const sound = {
     tone(48, 3, { type: 'sawtooth', gain: 0.2, slide: 22, attack: 0.01, cutoff: 200 });
   },
 };
+
+// ---------- Eigene Sounddateien ----------
+// In sounds/sounds.json eingetragene Dateien ersetzen den synthetischen Klang gleichen Namens,
+// z. B. { "confirm": "confirm.wav", "alarm": "alarm.mp3" }. Fehlt ein Eintrag, bleibt der Synth-Klang.
+const files = {};
+const synth = { ...sound };
+let manifest = null;
+
+async function loadFiles() {
+  if (manifest) return;
+  manifest = {};
+  try {
+    const res = await fetch('sounds/sounds.json', { cache: 'no-cache' });
+    if (res.ok) manifest = await res.json();
+  } catch { /* keine Dateien */ }
+  const c = audio();
+  if (!c) return;
+  await Promise.all(Object.entries(manifest).map(async ([name, file]) => {
+    if (!file || typeof synth[name] !== 'function') return;
+    try {
+      const buf = await (await fetch(`sounds/${file}`)).arrayBuffer();
+      files[name] = await c.decodeAudioData(buf);
+    } catch { /* Datei fehlt oder unlesbar: Synth-Klang */ }
+  }));
+}
+
+let lastFileTick = 0;
+function playFile(name) {
+  const c = audio();
+  if (!c || !enabled) return;
+  if (name === 'tick') {
+    const now = performance.now();
+    if (now - lastFileTick < 55) return;
+    lastFileTick = now;
+  }
+  const src = c.createBufferSource();
+  src.buffer = files[name];
+  src.connect(c.destination);
+  src.start();
+}
+
+for (const name of Object.keys(synth)) {
+  if (['enabled', 'toggle', 'unlock'].includes(name) || typeof synth[name] !== 'function') continue;
+  sound[name] = (...args) => (files[name] ? playFile(name) : synth[name](...args));
+}
+sound.unlock = () => { audio(); loadFiles(); };

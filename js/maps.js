@@ -231,7 +231,6 @@ export class MapView {
     this.setState('TRACKING');
     if (this.info.start) await this.flight(tok);
     else if (arrive === 'zoom') {
-      this.sound.zoom();
       await this.zoomTo(scaled(this.home, 4), this.home, 650, easeOut, tok, (k) => Math.min(1, k * 1.6));
     } else {
       await this.zoomTo(scaled(this.home, 1.12), this.home, 450, easeOut, tok, (k) => k);
@@ -250,8 +249,6 @@ export class MapView {
     const { start, via, home, target, world, route } = this.info;
     const end = { x: home.x + home.w / 2, y: home.y + home.h / 2 };
     const total = this.config.starmap.distancePc;
-    this.sound.zoom();
-    setTimeout(() => { if (tok === this.token) this.sound.zoom(); }, 1500);
     await this.tween(3600, (k) => {
       const e = easeInOut(k);
       const w = Math.exp(Math.log(start.w) + (Math.log(home.w) - Math.log(start.w)) * e);
@@ -298,7 +295,6 @@ export class MapView {
     this.pending = this.level + 1;
     this.panel.hidden = true;
     this.layer.querySelectorAll('.lock text, .lock .m-tagbox').forEach((t) => t.remove());
-    this.sound.zoom();
     const into = scaled(this.home, 0.04, this.info.target.x, this.info.target.y);
     await this.zoomTo(this.home, into, 800, easeIn, tok, (k) => 1 - Math.max(0, (k - 0.55) / 0.45));
     if (tok !== this.token) return;

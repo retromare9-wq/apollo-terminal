@@ -59,6 +59,9 @@ export function matchTopic(input, topics) {
     };
     check(topic.keywords, 3);
     check(topic.weak, 1);
+    // Exakt eingetippte Frage gewinnt immer
+    if ((topic.questions || []).some((q) => q && normalize(q) === text)) score += 100;
+    if (score > 0) score += topic.bonus || 0;
     // Bei Gleichstand gewinnt die Kategorie mit den spezifischeren (längeren) Treffern.
     if (score > 0 && (!best || score > best.score || (score === best.score && length > best.length))) {
       best = { topic, score, length };

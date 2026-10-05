@@ -160,3 +160,8 @@ body.tab-content .map-only, body.tab-content .ed-tools, body.tab-content .ed-can
 .ed-smrow.on { background: #2a1408; }
 .ed-smno { flex: 0 0 34px; text-align: right; color: var(--amber-dim); font-weight: 700; font-size: 12px; }
 .ed-smrow.on .ed-smno { color: var(--mint); }
+
+.ed-info { border: 2px solid var(--amber-dim); padding: 6px 12px 10px; margin-bottom: 12px; background: #0e0704; }
+.ed-info .ed-block { border-color: var(--rust); }
+.ed-ihead { font-size: 11px; font-weight: 700; letter-spacing: .08em; color: var(--amber-dim); margin: 8px 0 6px; }
+.ed-note b { color: var(--amber); }

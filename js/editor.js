@@ -885,7 +885,7 @@ function importFile(file) {
 
 let contentEd = null;
 function initTabs() {
-  const tabs = [['map', 'STATIONSPLAN'], ...CONTENT_TABS];
+  const tabs = CONTENT_TABS;
   $('#tabs').innerHTML = tabs.map(([k, t]) => `<button class="ed-tab" data-tab="${k}">${t}</button>`).join('');
   contentEd = createContentEditor($('#content'), {
     level,

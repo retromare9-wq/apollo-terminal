@@ -68,7 +68,8 @@ function setTitle(title, right = '') {
   $('#title-right').textContent = right;
 }
 
-function setHint(text) { $('#f-hint').textContent = text; }
+// Hinweise in der Fußleiste: *X* = Taste X (fett gelb)
+function setHint(text) { $('#f-hint').innerHTML = esc(text).replace(/\*([^*]+)\*/g, '<b class="hk">$1</b>'); }
 
 function renderCmd() {
   const mask = state.view === 'selfdestruct' && /code/.test(state.sd?.step || '');
@@ -96,7 +97,7 @@ function updateUser() {
 }
 
 function updateFlags() {
-  $('#f-snd').textContent = `SND ${sound.enabled ? 'ON' : 'OFF'}`;
+  document.body.classList.toggle('muted', !sound.enabled);
 }
 
 // ---------- Schreibmaschinen-Effekt ----------
@@ -156,7 +157,7 @@ function showMenu() {
   leave();
   state.view = 'menu';
   setTitle('HAUPTMENÜ', '1A ◂');
-  setHint('↑↓ WÄHLEN · ⏎ ÖFFNEN · ODER FRAGE EINTIPPEN');
+  setHint('↑↓ WÄHLEN · BUCHSTABE ODER FRAGE EINTIPPEN');
   const menu = visibleMenu();
   if (state.menuIndex >= menu.length) state.menuIndex = 0;
   view.innerHTML = `
@@ -170,7 +171,7 @@ function showMenu() {
       <aside class="menu-side">
         <div class="readouts user">
           <div class="ro col"><span class="dim">AKTUELLER BENUTZER</span><span>${esc(state.user?.name || '–')}</span></div>
-          <div class="ro col switch" title="Zugang wechseln"><span class="dim">ZUGANGSSTUFE <span class="ro-key">[W] WECHSELN</span></span><span class="${levelClass()}">${esc(levelName())}</span></div>
+          <div class="ro col switch" title="Zugang wechseln"><span class="dim">ZUGANGSSTUFE <span class="ro-key"><b>W</b> WECHSELN</span></span><span class="${levelClass()}">${esc(levelName())}</span></div>
         </div>
         ${canSee('orange') ? `<div class="readouts station">
           ${CONFIG.readouts.map((r) => `<div class="ro"><span>${esc(r.label)}</span><span class="${r.state}">${esc(r.value)}</span></div>`).join('')}
@@ -235,7 +236,7 @@ function showReport(topic) {
   leave();
   state.view = 'report';
   setTitle(topic.title, '2B ◂');
-  setHint('⏎ ÜBERSPRINGEN · ↑↓ BLÄTTERN · ESC MENÜ');
+  setHint('↑↓ BLÄTTERN · ESC MENÜ');
   view.innerHTML = `<div class="report">
       <div class="report-head"><span>REF ${topic.id.toUpperCase().slice(0, 4)}-${pad(topic.title.length * 37, 4)} // ${esc(CONFIG.stationCode)}</span></div>
       ${topic.blocks.map(blockHtml).join('')}
@@ -291,7 +292,7 @@ function showHelp() {
       <div class="help-grid">
         ${examples.map((t) => `<div class="help-item"><span class="hl">${esc(t.title)}</span><span class="dim">z.B. „${esc(t.example)}“</span></div>`).join('')}
       </div>
-      <p class="dim">ANGEMELDET: ${esc(state.user?.name || '–')} // ZUGANGSSTUFE ${esc(levelName())} · W+⏎ ZUGANG WECHSELN · X+⏎ ABMELDEN.</p>
+      <p class="dim">ANGEMELDET: ${esc(state.user?.name || '–')} // ZUGANGSSTUFE ${esc(levelName())} · W ZUGANG WECHSELN · X ABMELDEN.</p>
       <p class="dim">TASTEN: ↑↓ AUSWAHL · ⏎ BESTÄTIGEN · ESC ZURÜCK · F9 TON AN/AUS · F10 RÖHRENEFFEKT · F11 VOLLBILD</p>
     </div>`;
   typewrite(view.firstElementChild, 600);
@@ -337,8 +338,8 @@ function showMap(topic) {
     sound,
     onLevel: (i, info) => {
       setTitle(info.title, `R${i + 1} ◂`);
-      if (info.plan) setHint('←→ RAUM · ID+⏎ · STRG+PFEILE BEWEGEN · +/# ZOOM · ESC');
-      else setHint(info.next ? `A+⏎ ${info.next} · ↑ ZURÜCK · STRG+PFEILE · +/# · ESC` : '↑ ZURÜCK · ESC MENÜ');
+      if (info.plan) setHint('←→ RAUM · RAUM-ID EINTIPPEN · ↑ ZURÜCK · STRG+PFEILE BEWEGEN · +/# ZOOM · ESC');
+      else setHint('↓/↑ WEITER/ZURÜCK · STRG+PFEILE BEWEGEN · +/# ZOOM · ESC MENÜ');
     },
   });
   state.map.show(LEVELS.indexOf(topic.level));
@@ -349,8 +350,8 @@ function showMap(topic) {
 function showInterkom() {
   leave();
   state.view = 'interkom';
-  setTitle('INTERKOM', '3C ◂');
-  setHint('↑↓ WÄHLEN · A ANRUFEN · B NACHRICHT · ESC');
+  setTitle('INTERKOMM', '3C ◂');
+  setHint('↑↓ WÄHLEN · *A* ANRUFEN · *B* NACHRICHT · ESC MENÜ');
   view.innerHTML = `<div class="ik">
       <ul class="ik-list">${PERSONNEL.map((p, i) => `<li data-i="${i}"><span class="k">${pad(i + 1)}</span><span>${esc(p.name)}</span></li>`).join('')}</ul>
       <section class="ik-profile"></section>
@@ -399,8 +400,8 @@ async function startChat(mode) {
   state.view = 'chat';
   const chat = { person: p, mode, timers: [], connected: false };
   state.chat = chat;
-  setTitle(mode === 'call' ? 'INTERKOM // VERBINDUNG' : 'INTERKOM // NACHRICHT', '3D ◂');
-  setHint('⏎ SENDEN · ESC TRENNEN');
+  setTitle(mode === 'call' ? 'INTERKOMM // VERBINDUNG' : 'INTERKOMM // NACHRICHT', '3D ◂');
+  setHint('TEXT EINTIPPEN UND SENDEN · ESC TRENNEN');
   view.innerHTML = `<div class="chat">
       <div class="chat-head">
         <div class="mini-portrait">${portrait(p)}</div>
@@ -476,8 +477,8 @@ function showLogin(step = 'id', name = '', change = false) {
   setTitle(change ? 'ZUGANG WECHSELN' : 'IDENTIFIKATION', 'ID ◂');
   const opts = loginOptions();
   const cls = { green: 'lvl-green', orange: 'lvl-orange', red: 'lvl-red', mainframe: 'lvl-red' };
-  if (step === 'id') setHint('NAME EINTIPPEN + ⏎ · ODER ↑↓ / BUCHSTABE WÄHLEN');
-  else setHint(`↑↓ / BUCHSTABE WÄHLEN · ⏎ BESTÄTIGEN · ESC ${change ? 'ABBRECHEN' : 'ZURÜCK'}`);
+  if (step === 'id') setHint('NAME EINTIPPEN · ODER *A* GAST · *B* MAINFRAME');
+  else setHint(`ZUGANGSSTUFE *A* *B* *C* *D* WÄHLEN · ESC ${change ? 'ABBRECHEN' : 'ZURÜCK'}`);
   view.innerHTML = `<div class="login">
       <div class="login-box">
         <div class="login-head"><span>${esc(CONFIG.company)} // ZUGANGSKONTROLLE</span><span>${esc(CONFIG.stationCode)} ${esc(CONFIG.terminalId)}</span></div>
@@ -541,11 +542,10 @@ function changeAccess() {
   showLogin('level', state.user.name, true);
 }
 
+// X: Terminal verlassen – zurück zum allerersten Bildschirm
 function logout() {
   sound.beep();
-  state.user = null;
-  updateUser();
-  showLogin();
+  setTimeout(() => location.reload(), 120);
 }
 
 // ---------- KOMMLOG ----------
@@ -558,7 +558,7 @@ function showCommlog() {
   leave();
   state.view = 'commlog';
   setTitle('KOMMLOG // STATIONSKOMMUNIKATION', '4K ◂');
-  setHint('↑↓ WÄHLEN · ⏎ ÖFFNEN · ESC MENÜ');
+  setHint('↑↓ NACHRICHT WÄHLEN UND ÖFFNEN · ESC MENÜ');
   const list = visibleLog();
   if (state.logIndex >= list.length) state.logIndex = 0;
   view.innerHTML = `<div class="log">
@@ -590,7 +590,7 @@ function openMessage(i) {
   leave();
   state.view = 'message';
   setTitle('KOMMLOG // NACHRICHT', '4M ◂');
-  setHint('⏎ ÜBERSPRINGEN · ↑↓ BLÄTTERN · ESC LISTE');
+  setHint('↑↓ BLÄTTERN · ESC LISTE');
   const person = PERSONNEL.find((p) => p.name && normalize(p.name) === normalize(m.from || ''));
   const image = m.image || person?.image || '';
   view.innerHTML = `<div class="msg-view">
@@ -618,7 +618,7 @@ function showSystems() {
   leave();
   state.view = 'systems';
   setTitle('ZUGRIFF STATIONSSYSTEME', '5S ◂');
-  setHint('PFEILTASTEN WÄHLEN · ⏎ AUSWÄHLEN · ESC MENÜ');
+  setHint('PFEILTASTEN WÄHLEN · ESC MENÜ');
   if (state.sysIndex >= SYSTEMS.length) state.sysIndex = 0;
   view.innerHTML = `<div class="sys">
       <div class="report-head"><span>STATIONSSYSTEME // FERNZUGRIFF</span><span>BENUTZER ${esc(state.user?.name || '–')}</span></div>
@@ -663,7 +663,7 @@ function showSelfDestruct() {
   leave();
   state.view = 'selfdestruct';
   setTitle('SELBSTZERSTÖRUNG', 'SD ◂');
-  setHint('EINGABE + ⏎ · ESC MENÜ');
+  setHint('EINGABE TIPPEN · ESC MENÜ');
   const sd = { step: 'code', printing: false };
   state.sd = sd;
   view.innerHTML = `<div class="sd">
@@ -811,8 +811,27 @@ function detonate() {
 
 // ---------- Freie Anfrage ----------
 
+// Kandidaten für die freie Eingabe: alle Kategorien plus ihre zusätzlichen Infos
+function candidates() {
+  const list = [];
+  for (const t of TOPICS) {
+    list.push(t);
+    (t.infos || []).forEach((info) => {
+      const qWords = (info.questions || []).flatMap((q) => normalize(q).split(' ')).filter((w) => w.length >= 5);
+      list.push({ keywords: info.keywords || [], weak: qWords, questions: info.questions || [], bonus: 0.5, topic: t, info });
+    });
+  }
+  return list;
+}
+
+function showInfo(topic, info) {
+  const access = info.access || topic.access;
+  if (!canSee(access)) return showDenied({ title: `${topic.title} // ${info.title}`, access });
+  showReport({ id: topic.id, title: `${topic.title} // ${info.title || 'INFO'}`, blocks: info.blocks || [] });
+}
+
 async function query(raw) {
-  const hit = matchTopic(raw, TOPICS);
+  const hit = matchTopic(raw, candidates());
   leave();
   state.busy = true;
   state.view = 'processing';
@@ -830,6 +849,7 @@ async function query(raw) {
   state.busy = false;
   if (!hit) return showUnknown(raw);
   sound.confirm();
+  if (hit.topic.info) return showInfo(hit.topic.topic, hit.topic.info);
   openTopic(hit.topic);
 }
 

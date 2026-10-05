@@ -1,6 +1,6 @@
 # apollo-terminal
 
-Interaktives Stationsterminal **A.P.O.L.L.O.** für ALIEN RPG: Die Spieler stellen am Laptop Fragen an den Stationscomputer, rufen Berichte und animierte Karten ab und nehmen über das Interkom Kontakt zu den Stationsbewohnern auf.
+Interaktives Stationsterminal **A.P.O.L.L.O.** für ALIEN RPG: Die Spieler stellen am Laptop Fragen an den Stationscomputer, rufen Berichte und animierte Karten ab und nehmen über das Interkomm Kontakt zu den Stationsbewohnern auf.
 
 > **Stand: Design-Prototyp.** Chat-Antworten werden noch simuliert. Die Spielleiter-Konsole fürs Handy folgt im nächsten Schritt.
 
@@ -14,7 +14,7 @@ Nach dem Start fragt A.P.O.L.L.O. nach der Identität:
 
 | Stufe | Sichtbar |
 |---|---|
-| Grün | Stationsplan, Mond-, System-, Sternenkarte, Interkom, Hilfe |
+| Grün | Stationsplan, Mond-, System-, Sternenkarte, Interkomm, Hilfe |
 | Orange | zusätzlich Berichte (Schaden, Lebenserhaltung, Energie …) und **KOMMLOG** |
 | Rot | zusätzlich **ZUGRIFF STATIONSSYSTEME** |
 | Mainframe | zusätzlich **SELBSTZERSTÖRUNG EINLEITEN** |
@@ -23,8 +23,8 @@ Die Menütasten (A, B, C …) werden je nach Stufe automatisch vergeben (W und X
 Gesperrte Kategorien melden bei freier Eingabe „ZUGRIFF VERWEIGERT“. Benutzer und Stufe stehen
 unten rechts; die Stationswerte im Hauptmenü erscheinen erst ab Orange.
 
-Von überall im Terminal: **W + Enter** wechselt die Zugangsstufe, **X + Enter** meldet ab
-(zurück zur Identifikation).
+Von überall im Terminal: **W + Enter** wechselt die Zugangsstufe, **X + Enter** verlässt das
+Terminal (zurück zum allerersten Bildschirm).
 
 **Selbstzerstörung:** beliebigen Code eingeben, mit `JA` bestätigen → Countdown mit Alarm.
 Im Selbstzerstörungs-Fenster bricht `ABBRUCH` (danach Code) ab; neu laden setzt alles zurück.
@@ -53,16 +53,21 @@ Während einer Karten-Animation überspringt jede Taste direkt zum Ziel.
 
 `editor.html` – über die Reiter in der Fußleiste:
 
-- **STATIONSPLAN**: Karten-Editor (siehe unten)
-- **ALLGEMEIN**: Namen von Computer, Station, Mond, Planet, Stern, Sektor; Kennung und Datum im Infokasten oben rechts; Begrüßung, Statusanzeige im Menü, Startsequenz, Interkom-Antworten
-- **STERNENKARTE**: Sternensysteme und Sektoren benennen (in der Kartenvorschau anklicken), Datenpanel, Legende
-- **SYSTEM-/MONDKARTE**: alle Beschriftungen und Datenzeilen der Karten
-- **SCHADENSBERICHT**: Einleitung, Fälle, Hüllenintegrität, Empfehlung; Fälle mit Raum setzen den Raumstatus direkt im Stationsplan
-- **BERICHTE**: Titel, Schlüsselwörter und Inhalt aller Kategorien; neue Berichte anlegen
-- **MENÜ** und **PERSONAL**: Hauptmenü mit Zugangsstufe je Kategorie, Stationsbewohner
-- **KOMMLOG**: Nachrichten mit Datum, Uhrzeit, Sender, Empfänger, Betreff, Zugangsstufe, Status, Text und Absenderbild
-- **STATIONSSYSTEME**: Beschriftung der Schaltflächen
-- **SELBSTZERSTÖRUNG**: alle Texte der Abfrage und Sequenz, Countdown-Dauer
+- **ALLGEMEIN**: Namen von Computer, Station, Mond, Planet, Stern, Sektor; Kennung und Datum im Infokasten oben rechts; Begrüßung, Statusanzeige, Startsequenz, Interkomm-Antworten
+- **MENÜ**: Hauptmenü mit Zugangsstufe je Kategorie
+- **STATION**: Karten-Editor des Stationsplans (siehe unten)
+- **STERN / SYSTEM / MOND**: Beschriftungen der Karten; auf der Sternenkarte Systeme und Sektoren benennen
+- **SCHÄDEN**: Schadensbericht; Fälle mit Raum setzen den Raumstatus im Stationsplan
+- **BERICHTE**: alle Kategorien für die freie Eingabe (siehe unten)
+- **PERSONAL**: Stationsbewohner für das Interkomm
+- **KOMMLOG**, **SYSTEME**, **SELBSTZERSTÖRUNG**: Inhalte der jeweiligen Bereiche
+
+### Berichte und Infos
+
+Tippt jemand eine Frage ein, vergleicht A.P.O.L.L.O. die Wörter mit den Schlüsselwörtern aller
+Kategorien und ihrer **Infos** und zeigt den besten Treffer. Jede Kategorie kann beliebig viele
+Infos haben – jeweils mit Titel, Zugangsstufe, Fragen (exakt eingetippt = sicherer Treffer),
+Schlüsselwörtern und einem oder mehreren Inhaltsbausteinen (Text, Warnmeldung, Tabelle, Balkenanzeige).
 
 Alle Texte werden im Browser gespeichert, das Terminal übernimmt sie sofort. **Exportieren**
 sichert Karte, Ausrüstung und Texte in einer Datei.
@@ -94,6 +99,11 @@ Gespeichert wird automatisch im Browser; ein offenes Terminal im selben Browser 
 Übertragung auf ein anderes Gerät per **Importieren**). Eine exportierte Datei kann als
 Vorgabe in `js/station-layer0.js` übernommen werden.
 
+## Sounds
+
+Alle Klänge werden in [`js/sound.js`](js/sound.js) synthetisch erzeugt. Eigene Dateien kommen in
+[`sounds/`](sounds/README.md) und werden in `sounds/sounds.json` einem Klang zugeordnet.
+
 ## Inhalte anpassen
 
 Alle Texte stehen in [`js/data.js`](js/data.js):
@@ -102,7 +112,7 @@ Alle Texte stehen in [`js/data.js`](js/data.js):
 - `TOPICS`: Informationskategorien mit Schlüsselwörtern und Berichtsinhalt (Text, Warnungen, Tabellen, Balkenanzeigen)
 - `MENU`: Hauptmenü
 - `STATION`: Ebenen des Stationsplans (Grundriss aus `js/station-level0.js`, editierbare Ebene aus dem Karten-Editor)
-- `PERSONNEL`: Bewohner für das Interkom (optional mit Profilbild)
+- `PERSONNEL`: Bewohner für das Interkomm (optional mit Profilbild)
 
 Wörter wie SCHADEN, WARNUNG, OFFLINE oder NICHT ERREICHBAR werden in Berichten automatisch eingefärbt.
 
