@@ -52,9 +52,9 @@ const TOOLS = [
   { id: 'picto', key: '7', label: 'PIKTOGRAMM', hint: 'Piktogramm links auswählen, dann in einen Raum klicken (höchstens 5 pro Raum)' },
   { id: 'label', key: '8', label: 'BESCHRIFTUNG', hint: 'Klicken, um eine neue Beschriftung zu setzen · vorhandene Beschriftungen mit dem Auswahl-Werkzeug anklicken, ändern und verschieben' },
   // Grundriss
-  { id: 'proom', key: 'q', plan: true, label: 'RAUM ZEICHNEN', hint: 'Rechteck aufziehen · rastet auf ½ mm ein (1 Kästchen = 1 mm = 0,5 m) · im Raum-Fenster „+ TEILFLÄCHE“ baut an einen Raum an' },
-  { id: 'cnarrow', key: 'w', plan: true, label: 'KORRIDOR SCHMAL', hint: 'Strecke ziehen – die Breite ist fest (schmal) · Breiten im Kartenfenster einstellbar (Esc = nichts gewählt)' },
-  { id: 'cwide', key: 'e', plan: true, label: 'KORRIDOR BREIT', hint: 'Strecke ziehen – die Breite ist fest (breit)' },
+  { id: 'proom', key: 'q', plan: true, label: 'RAUM ZEICHNEN', hint: 'Rechteck aufziehen · Größe in 5-mm-Schritten (2,5 m), mit gedrückter Strg-Taste in 1-mm-Schritten (1 Kästchen = 1 mm = 0,5 m) · im Raum-Fenster „+ TEILFLÄCHE“ baut an einen Raum an' },
+  { id: 'cnarrow', key: 'w', plan: true, label: 'KORRIDOR SCHMAL', hint: 'Strecke ziehen – Breite fest (schmal), Länge in 5-mm-Schritten · mit Strg frei in 1-mm-Schritten · Breiten im Kartenfenster einstellbar (Esc = nichts gewählt)' },
+  { id: 'cwide', key: 'e', plan: true, label: 'KORRIDOR BREIT', hint: 'Strecke ziehen – Breite fest (breit), Länge in 5-mm-Schritten · mit Strg frei in 1-mm-Schritten' },
   { id: 'plift', key: 'a', plan: true, label: 'AUFZUG', hint: 'Klicken setzt einen Aufzug (Kabine + Leitergang) · anklicken, um ihn zu drehen, zu verschieben oder Ebenen zuzuordnen' },
 ];
 const snapP = (pt) => ({ x: snap(pt.x, SNAP), y: snap(pt.y, SNAP) });
@@ -405,7 +405,7 @@ function renderProps() {
       <div class="ed-field">TEILFLÄCHEN</div>
       ${room.rects.map((r, i) => `<div class="ed-row"><span>TEIL ${i + 1}: ${m(r[2] - r[0])} × ${m(r[3] - r[1])} M</span>${room.rects.length > 1 ? `<button class="danger ed-mini" data-partdel="${i}">✕</button>` : ''}</div>`).join('')}
       <div class="ed-btns"><button data-append>${st.append === room.id ? 'JETZT RECHTECK AUFZIEHEN …' : '+ TEILFLÄCHE ANBAUEN'}</button><button class="danger" data-pdel>RAUM LÖSCHEN</button></div>
-      <p class="ed-note">Gewählten Raum ziehen = verschieben (Türen, Kameras und Raum-ID wandern mit) · gelbe Ecken ziehen = Größe ändern.</p>`;
+      <p class="ed-note">Gewählten Raum ziehen = verschieben (Türen, Kameras und Raum-ID wandern mit) · gelbe Ecken ziehen = Größe ändern in 5-mm-Schritten, mit Strg in 1-mm-Schritten · Strg+C / Strg+V kopiert.</p>`;
     bindRoomFields(props, room);
     bindColors(room, 'room');
     props.querySelector('[data-append]').addEventListener('click', () => { st.append = room.id; setTool('proom'); renderProps(); });
@@ -433,7 +433,7 @@ function renderProps() {
       ${colorRows(st0.fill, st0.stroke, DEF.corr)}
       <div class="ed-btns"><button data-allcol="corr">FARBEN FÜR ALLE KORRIDORE DER EBENE</button></div>
       <div class="ed-btns"><button class="danger" data-pdel>KORRIDOR LÖSCHEN</button></div>
-      <p class="ed-note">Gewählten Korridor ziehen = verschieben · gelbe Ecken ziehen = Länge/Breite ändern. Wo Korridor- und Raumrahmen aufeinanderliegen, gilt der Korridorrahmen.</p>`;
+      <p class="ed-note">Gewählten Korridor ziehen = verschieben · gelbe Ecken ziehen = Länge ändern (mit Strg auch die Breite, in mm-Schritten). Wo Korridor- und Raumrahmen aufeinanderliegen, ist der Raumrahmen zu sehen.</p>`;
     bindColors(c, 'corr');
     props.querySelector('[data-pdel]').addEventListener('click', () => deletePlanItem(sel));
   } else if (sel.kind === 'lift') {
@@ -987,19 +987,24 @@ function renderEquip(filter) {
 const norm4 = (a, b) => [Math.min(a.x, b.x), Math.min(a.y, b.y), Math.max(a.x, b.x), Math.max(a.y, b.y)];
 
 // Rechteck beim Aufziehen: Raum frei, Korridor mit fester Breite entlang der Hauptrichtung
+// Größe in Schritten: ohne Strg 5 mm (2,5 m), mit Strg 1 mm (0,5 m)
+const STEP = MM * 5;
+const stepOf = () => (st.ctrl ? MM : STEP);
+const stepLen = (v, step) => Math.sign(v || 1) * Math.max(step, Math.round(Math.abs(v) / step) * step);
+
+// Rechteck beim Aufziehen: Raum frei, Korridor mit fester Breite entlang der Hauptrichtung (mit Strg frei)
 function drawRect(d, pt) {
   const a = d.start;
-  const b = snapP(pt);
-  if (d.kind === 'room') {
-    const r = norm4(a, b);
-    return r[2] - r[0] >= MM && r[3] - r[1] >= MM ? r : null;
+  const dx = pt.x - a.x;
+  const dy = pt.y - a.y;
+  if (Math.max(Math.abs(dx), Math.abs(dy)) < MM / 2) return null;
+  const step = stepOf();
+  if (d.kind === 'room' || st.ctrl) {
+    return norm4(a, { x: a.x + stepLen(dx, step), y: a.y + stepLen(dy, step) });
   }
   const w = d.kind === 'cwide' ? MAP.wide : MAP.narrow;
-  const dx = b.x - a.x;
-  const dy = b.y - a.y;
-  if (Math.max(Math.abs(dx), Math.abs(dy)) < MM) return null;
-  if (Math.abs(dx) >= Math.abs(dy)) return [Math.min(a.x, b.x), a.y, Math.max(a.x, b.x), a.y + w];
-  return [a.x, Math.min(a.y, b.y), a.x + w, Math.max(a.y, b.y)];
+  if (Math.abs(dx) >= Math.abs(dy)) return norm4(a, { x: a.x + stepLen(dx, step), y: a.y + w });
+  return norm4(a, { x: a.x + w, y: a.y + stepLen(dy, step) });
 }
 
 function nextRoomId() {
@@ -1135,17 +1140,98 @@ function startResize(e, tag) {
 }
 
 function resizePlan(d, pt) {
-  const p = snapP(pt);
-  const r = d.orig.slice();
+  const o = d.orig;
   const [ix, iy] = CORNERS[d.corner];
-  r[ix] = p.x;
-  r[iy] = p.y;
-  const out = [Math.min(r[0], r[2]), Math.min(r[1], r[3]), Math.max(r[0], r[2]), Math.max(r[1], r[3]), ...d.orig.slice(4)];
-  if (out[2] - out[0] < SNAP || out[3] - out[1] < SNAP) return;
+  const ox = o[ix === 0 ? 2 : 0];   // gegenüberliegende Ecke bleibt fest
+  const oy = o[iy === 1 ? 3 : 1];
+  const step = stepOf();
+  let nx = ox + stepLen(pt.x - ox, step);
+  let ny = oy + stepLen(pt.y - oy, step);
+  // Korridor ohne Strg: Breite bleibt, nur die Länge ändert sich
+  if (d.kind === 'corr' && !st.ctrl) {
+    if (o[2] - o[0] >= o[3] - o[1]) ny = o[iy]; else nx = o[ix];
+  }
+  const out = [Math.min(ox, nx), Math.min(oy, ny), Math.max(ox, nx), Math.max(oy, ny), ...o.slice(4)];
   d.moved = true;
   if (d.kind === 'room') roomById(st.sel.id).rects[d.part] = out;
   else level.corridors[st.sel.id] = out;
   render();
+}
+
+// ---------- Kopieren und Einfügen (Strg+C / Strg+V) ----------
+
+const deep = (o) => JSON.parse(JSON.stringify(o));
+
+function copySel() {
+  const sel = st.sel;
+  if (!sel) return;
+  let clip = null;
+  if (sel.kind === 'room') {
+    const room = roomById(sel.id);
+    const info = deep(layer.rooms[room.id] || {});
+    delete info.code;
+    clip = { kind: 'room', room: deep(room), info, box: bbox(room.rects) };
+  } else if (sel.kind === 'corr') {
+    const c = level.corridors[sel.id];
+    clip = { kind: 'corr', rect: deep(c), box: c.slice(0, 4) };
+  } else if (sel.kind === 'lift') {
+    const l = level.lifts.find((x) => x.id === sel.id);
+    const info = deep(layer.lifts[l.id] || {});
+    delete info.letter;
+    clip = { kind: 'lift', lift: deep(l), info, box: l.rect.slice(0, 4) };
+  } else if (['door', 'cam', 'line'].includes(sel.kind)) {
+    const o = find(sel.kind, sel.id);
+    const box = sel.kind === 'line' ? [Math.min(o.x1, o.x2), Math.min(o.y1, o.y2)] : [o.x, o.y];
+    clip = { kind: sel.kind, obj: deep(o), box };
+  } else if (sel.kind === 'label') {
+    const l = find('label', sel.id);
+    clip = { kind: 'label', obj: { text: l.text, x: l.x, y: l.y }, box: [l.x, l.y] };
+  }
+  if (!clip) return;
+  st.clip = clip;
+  toast('KOPIERT – STRG+V FÜGT AN DER MAUSPOSITION EIN');
+}
+
+function pasteClip() {
+  const c = st.clip;
+  if (!c) return;
+  // Ziel: obere linke Ecke an die Mausposition, sonst leicht versetzt
+  const at = st.mouse ? snapP(st.mouse) : { x: c.box[0] + 50, y: c.box[1] + 50 };
+  const dx = at.x - c.box[0];
+  const dy = at.y - c.box[1];
+  const sh = (r) => [r[0] + dx, r[1] + dy, r[2] + dx, r[3] + dy, ...deep(r.slice(4))];
+  snapshot();
+  if (c.kind === 'room') {
+    const room = { ...deep(c.room), id: nextRoomId(), rects: c.room.rects.map(sh) };
+    level.rooms.push(room);
+    const info = deep(c.info);
+    if (info.idPos) info.idPos = { x: info.idPos.x + dx, y: info.idPos.y + dy };
+    if (Object.keys(info).length) layer.rooms[room.id] = info;
+    st.sel = { kind: 'room', id: room.id };
+  } else if (c.kind === 'corr') {
+    level.corridors.push(sh(c.rect));
+    st.sel = { kind: 'corr', id: level.corridors.length - 1 };
+  } else if (c.kind === 'lift') {
+    const used = new Set(level.lifts.map((l) => l.id));
+    const id = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('').find((x) => !used.has(x)) || uid('L');
+    level.lifts.push({ ...deep(c.lift), id, rect: sh(c.lift.rect) });
+    if (Object.keys(c.info).length) layer.lifts[id] = deep(c.info);
+    st.sel = { kind: 'lift', id };
+  } else if (c.kind === 'line') {
+    const o = { ...deep(c.obj), id: uid('l'), x1: c.obj.x1 + dx, y1: c.obj.y1 + dy, x2: c.obj.x2 + dx, y2: c.obj.y2 + dy };
+    layer.lines.push(o);
+    st.sel = { kind: 'line', id: o.id };
+  } else if (c.kind === 'door' || c.kind === 'cam') {
+    const o = { ...deep(c.obj), id: uid(c.kind === 'door' ? 'd' : 'c'), x: c.obj.x + dx, y: c.obj.y + dy };
+    (c.kind === 'door' ? layer.doors : layer.cams).push(o);
+    st.sel = { kind: c.kind, id: o.id };
+  } else if (c.kind === 'label') {
+    const id = uid('lbl');
+    layer.labels[id] = { custom: true, text: c.obj.text, x: at.x, y: at.y };
+    st.sel = { kind: 'label', id };
+  }
+  commit();
+  renderProps();
 }
 
 function startPan(e, clickSelectsRoom = false) {
@@ -1155,6 +1241,8 @@ function startPan(e, clickSelectsRoom = false) {
 
 function onMove(e) {
   const pt = toMap(e);
+  st.ctrl = e.ctrlKey || e.metaKey;
+  st.mouse = pt;
   const d = st.drag;
   if (!d) { drawUi(pt); return; }
   if (d.type === 'pan') {
@@ -1222,7 +1310,7 @@ function onUp(e) {
     select(planAt(d.pt));
     return;
   }
-  if (d.type === 'draw') { finishDraw(d, toMap(e)); drawUi(); return; }
+  if (d.type === 'draw') { st.ctrl = e.ctrlKey || e.metaKey; finishDraw(d, toMap(e)); drawUi(); return; }
   if (d.type === 'resize' && !d.moved) { st.undo.pop(); updateButtons(); return; }
   if (d.type === 'handle' || ((d.type === 'move' || d.type === 'rid' || d.type === 'pmove' || d.type === 'resize') && d.moved)) {
     commit();
@@ -1443,7 +1531,15 @@ function init() {
   }, { passive: false });
   addEventListener('resize', () => setVB({ ...st.vb, h: st.vb.w * (svg.clientHeight / svg.clientWidth) }));
 
+  const ctrlPreview = (e) => {
+    const c = e.ctrlKey || e.metaKey;
+    if (c === st.ctrl) return;
+    st.ctrl = c;
+    if (st.drag?.type === 'draw' && st.mouse) drawUi(st.mouse);
+  };
+  addEventListener('keyup', ctrlPreview);
   addEventListener('keydown', (e) => {
+    ctrlPreview(e);
     if (e.key === 'Escape' && !equip.hidden) { closeEquip(); return; }
     if (e.key === 'Escape' && !detail.hidden) { closeDetail(); return; }
     if (e.target.closest('input, textarea, select')) return;
@@ -1452,6 +1548,8 @@ function init() {
     const k = e.key.toLowerCase();
     if ((e.ctrlKey || e.metaKey) && k === 'z') { e.preventDefault(); if (e.shiftKey) redo(); else undo(); return; }
     if ((e.ctrlKey || e.metaKey) && k === 'y') { e.preventDefault(); redo(); return; }
+    if ((e.ctrlKey || e.metaKey) && k === 'c') { e.preventDefault(); copySel(); return; }
+    if ((e.ctrlKey || e.metaKey) && k === 'v') { e.preventDefault(); pasteClip(); return; }
     if (e.ctrlKey || e.metaKey || e.altKey) return;
     const t = TOOLS.find((x) => x.key === k);
     if (t) { setTool(t.id); return; }

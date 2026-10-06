@@ -10,7 +10,7 @@ import { LAYER0 } from './station-layer0.js';
 export const PLANS_KEY = 'apollo.plans.v1';
 export const MM = 10;                 // Einheiten pro Millimeter Papier
 export const SNAP = 5;                // Einrasten: ½ mm (passt auch zum alten 25er-Raster)
-export const CORR_W = { narrow: 25, wide: 50 };
+export const CORR_W = { narrow: 30, wide: 50 };   // 1,5 m und 2,5 m
 
 // Vorgabe der editierbaren Schicht je Ebene (sonst leer)
 export const LAYER_FALLBACK = { level0: LAYER0 };
@@ -59,7 +59,7 @@ export function normPlans(data) {
       id: m.id || uid('m'),
       name: m.name || 'KARTE',
       terminal: m.terminal !== false,
-      narrow: Number(m.narrow) || CORR_W.narrow,
+      narrow: Number(m.narrow) && Number(m.narrow) !== 25 ? Number(m.narrow) : CORR_W.narrow,   // alte Vorgabe 1,25 m → 1,5 m
       wide: Number(m.wide) || CORR_W.wide,
       levels: (Array.isArray(m.levels) && m.levels.length ? m.levels : [{ id: uid('l'), plan: emptyPlan() }])
         .map((l) => ({ id: l.id || uid('l'), plan: normPlan(l.plan, l.plan?.name) })),

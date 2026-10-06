@@ -95,6 +95,17 @@ export function drawStationPlan(g, cfg, level, layer, opts = {}) {
   // Farben aus dem Editor über CSS-Variablen, damit Statusfarben (Schaden usw.) Vorrang behalten
   const colors = (fill, stroke, f, s) => [fill ? `${f}:${fill}` : '', stroke ? `${s}:${stroke}` : ''].filter(Boolean).join(';');
 
+  // Korridore vor den Räumen: wo sich Rahmen überlagern, ist der Raumrahmen zu sehen.
+  // Erst alle Rahmen, dann alle Füllungen – so entstehen an Kreuzungen keine Nähte.
+  const corr = el('g', { class: 'st-corrs' }, g);
+  const corrNodes = [];
+  const cAttr = (c, i, cls) => {
+    const style = colors(c[4]?.fill, c[4]?.stroke, '--cf', '--cs');
+    return { x: c[0], y: c[1], width: c[2] - c[0], height: c[3] - c[1], class: cls, 'data-corr': i, ...(style ? { style } : {}) };
+  };
+  level.corridors.forEach((c, i) => { corrNodes[i] = [el('rect', cAttr(c, i, 'st-corr-edge'), corr)]; });
+  level.corridors.forEach((c, i) => { corrNodes[i].push(el('rect', cAttr(c, i, 'st-corr'), corr)); });
+
   const roomLayer = el('g', {}, g);
   const nodes = {};
   level.rooms.forEach((room) => {
@@ -107,16 +118,6 @@ export function drawStationPlan(g, cfg, level, layer, opts = {}) {
     nodes[room.id] = rg;
   });
 
-  // Korridore nach den Räumen: Korridorrahmen hat Vorrang vor Raumrahmen.
-  // Erst alle Rahmen, dann alle Füllungen – so entstehen an Kreuzungen keine Nähte.
-  const corr = el('g', { class: 'st-corrs' }, g);
-  const corrNodes = [];
-  const cAttr = (c, i, cls) => {
-    const style = colors(c[4]?.fill, c[4]?.stroke, '--cf', '--cs');
-    return { x: c[0], y: c[1], width: c[2] - c[0], height: c[3] - c[1], class: cls, 'data-corr': i, ...(style ? { style } : {}) };
-  };
-  level.corridors.forEach((c, i) => { corrNodes[i] = [el('rect', cAttr(c, i, 'st-corr-edge'), corr)]; });
-  level.corridors.forEach((c, i) => { corrNodes[i].push(el('rect', cAttr(c, i, 'st-corr'), corr)); });
 
   const objects = drawLayer(el('g', {}, g), level, layer, {
     cams: opts.cams ?? layer.settings.showCams,

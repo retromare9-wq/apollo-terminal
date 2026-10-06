@@ -82,13 +82,14 @@ Raster wie Millimeterpapier: 1 Kästchen = 1 mm = 0,5 m, dicke Linie = 1 cm = 5 
 
 | Taste | Grundriss |
 |---|---|
-| Q | Raum zeichnen (Rechteck aufziehen; „+ TEILFLÄCHE“ baut an einen Raum an) |
-| W / E | Korridor schmal / breit (Strecke ziehen, feste Breite) |
+| Q | Raum zeichnen (Rechteck aufziehen in 5-mm-Schritten, mit Strg in 1-mm-Schritten; „+ TEILFLÄCHE“ baut an einen Raum an) |
+| W / E | Korridor schmal (1,5 m) / breit (2,5 m): Strecke ziehen, feste Breite; mit Strg frei in 1-mm-Schritten |
+| Strg+C / Strg+V | Gewähltes Objekt kopieren / an der Mausposition einfügen |
 | A | Aufzug setzen (drehen, Ebenen zuordnen im Aufzugsfenster) |
 | 1 | Raum/Korridor/Aufzug anklicken, dann ziehen = verschieben, gelbe Ecken = Größe |
 
 Räume und Korridore bekommen eigene Farben für Fläche und Rahmen. Wo Korridor- und Raumrahmen
-aufeinanderliegen, gilt der Korridorrahmen.
+aufeinanderliegen, ist der Raumrahmen zu sehen.
 
 Im Terminal wechselt **Strg + „+“ / Strg + „−“** (oder Bild↑/↓) die Ebene; ein Klick auf einen
 Aufzug – oder sein Buchstabe + Enter – zeigt die erreichbaren Ebenen, eine Ziffer wählt sie.
