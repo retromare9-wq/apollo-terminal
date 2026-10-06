@@ -1,22 +1,38 @@
 // Karten-Editor: Türen, Trennlinien, Kameras und Raumdaten auf einem Stationsplan eintragen.
-import { CONFIG, STATION } from './data.js';
+import { CONFIG } from './data.js';
 import { el } from './svg.js';
 import { drawStationPlan, roomName, roomCode, roomZone, liftData, applyZoom, planLabels, roomIdPos, bbox } from './stationplan.js';
 import {
   CAM, SECURITY, STATUS, UNITS_PER_M, DESC_FIELDS, MAX_PICTOS, loadLayer, saveLayer, emptyLayer, importLayer,
-  snapDoor, roomAt, containerRects, camHandle, roomDoors, roomCams, inRect,
+  snapDoor, roomAt, containerRects, camHandle, roomDoors, roomCams, inRect, corridorAt, storageKey,
 } from './layer.js';
 import { SEMIOTIC, semioticSvg, semioticById } from './semiotic.js';
 import { equipmentList, equipmentCategories, saveItem, deleteItem, exportEquipment, importEquipment } from './equipment.js';
 import { makeOdt } from './odt.js';
 import { loadContent, currentContent, saveContent } from './content.js';
 import { createContentEditor, CONTENT_TABS } from './content-editor.js';
+import { loadPlans, savePlans, normPlans, PLANS_KEY, asLevel, emptyPlan, SNAP, MM, LAYER_FALLBACK } from './plans.js';
 
 loadContent();
 
-const LV = STATION.levels[0];
-const level = LV.plan;
-let layer = loadLayer(LV.id, LV.layer);
+// Karten mit Ebenen; bearbeitet wird immer eine Ebene (level = Grundriss, layer = Türen, Kameras, Raumdaten)
+let plans = loadPlans();
+const cur = { mi: 0, li: 0 };
+try { Object.assign(cur, JSON.parse(sessionStorage.getItem('apollo.editor.level') || '{}')); } catch { /* egal */ }
+let MAP;
+let LV;
+let level;
+let layer;
+function bindLevel() {
+  if (!plans.maps[cur.mi]) cur.mi = 0;
+  MAP = plans.maps[cur.mi];
+  if (!MAP.levels[cur.li]) cur.li = 0;
+  LV = MAP.levels[cur.li];
+  level = asLevel(MAP, LV);
+  layer = loadLayer(LV.id, LAYER_FALLBACK[LV.id]);
+  try { sessionStorage.setItem('apollo.editor.level', JSON.stringify(cur)); } catch { /* egal */ }
+}
+bindLevel();
 
 const $ = (s) => document.querySelector(s);
 const svg = $('#map');
@@ -35,7 +51,13 @@ const TOOLS = [
   { id: 'erase', key: '6', label: 'RADIERER', hint: 'Tür, Linie oder Kamera anklicken zum Löschen' },
   { id: 'picto', key: '7', label: 'PIKTOGRAMM', hint: 'Piktogramm links auswählen, dann in einen Raum klicken (höchstens 5 pro Raum)' },
   { id: 'label', key: '8', label: 'BESCHRIFTUNG', hint: 'Klicken, um eine neue Beschriftung zu setzen · vorhandene Beschriftungen mit dem Auswahl-Werkzeug anklicken, ändern und verschieben' },
+  // Grundriss
+  { id: 'proom', key: 'q', plan: true, label: 'RAUM ZEICHNEN', hint: 'Rechteck aufziehen · rastet auf ½ mm ein (1 Kästchen = 1 mm = 0,5 m) · im Raum-Fenster „+ TEILFLÄCHE“ baut an einen Raum an' },
+  { id: 'cnarrow', key: 'w', plan: true, label: 'KORRIDOR SCHMAL', hint: 'Strecke ziehen – die Breite ist fest (schmal) · Breiten im Kartenfenster einstellbar (Esc = nichts gewählt)' },
+  { id: 'cwide', key: 'e', plan: true, label: 'KORRIDOR BREIT', hint: 'Strecke ziehen – die Breite ist fest (breit)' },
+  { id: 'plift', key: 'a', plan: true, label: 'AUFZUG', hint: 'Klicken setzt einen Aufzug (Kabine + Leitergang) · anklicken, um ihn zu drehen, zu verschieben oder Ebenen zuzuordnen' },
 ];
+const snapP = (pt) => ({ x: snap(pt.x, SNAP), y: snap(pt.y, SNAP) });
 
 const st = {
   tool: 'select',
@@ -52,20 +74,29 @@ const st = {
 
 // ---------- Verlauf und Speichern ----------
 
+const stateJson = () => JSON.stringify({ layer, plan: LV.plan });
+function restore(json) {
+  const d = JSON.parse(json);
+  layer = d.layer;
+  LV.plan = d.plan;
+  level = asLevel(MAP, LV);
+}
 function snapshot() {
-  st.undo.push(JSON.stringify(layer));
+  st.undo.push(stateJson());
   if (st.undo.length > 100) st.undo.shift();
   st.redo = [];
   updateButtons();
 }
 function commit() {
   saveLayer(LV.id, layer);
+  level = asLevel(MAP, LV);
+  savePlans(plans);
   render();
 }
 function undo() {
   if (!st.undo.length) return;
-  st.redo.push(JSON.stringify(layer));
-  layer = JSON.parse(st.undo.pop());
+  st.redo.push(stateJson());
+  restore(st.undo.pop());
   validateSel();
   commit();
   renderProps();
@@ -73,8 +104,8 @@ function undo() {
 }
 function redo() {
   if (!st.redo.length) return;
-  st.undo.push(JSON.stringify(layer));
-  layer = JSON.parse(st.redo.pop());
+  st.undo.push(stateJson());
+  restore(st.redo.pop());
   validateSel();
   commit();
   renderProps();
@@ -85,7 +116,12 @@ function updateButtons() {
   $('#redo').disabled = !st.redo.length;
 }
 function validateSel() {
-  if (st.sel && !['room', 'lift'].includes(st.sel.kind) && !find(st.sel.kind, st.sel.id)) st.sel = null;
+  const s0 = st.sel;
+  if (!s0) return;
+  if (s0.kind === 'room' && !roomById(s0.id)) st.sel = null;
+  else if (s0.kind === 'lift' && !level.lifts.some((l) => l.id === s0.id)) st.sel = null;
+  else if (s0.kind === 'corr' && !level.corridors[s0.id]) st.sel = null;
+  else if (!['room', 'lift', 'corr'].includes(s0.kind) && !find(s0.kind, s0.id)) st.sel = null;
 }
 
 const roomById = (id) => level.rooms.find((r) => r.id === id);
@@ -178,10 +214,13 @@ function toMap(e) {
 let ui = null;
 function render() {
   svg.replaceChildren();
+  drawGrid(el('g', { class: 'mm' }, svg));
   const g = el('g', {}, svg);
   const info = drawStationPlan(g, CONFIG, level, layer, { cams: true, editor: true });
   ui = el('g', {}, svg);
+  drawHandles();
   // Auswahl markieren
+  if (st.sel?.kind === 'corr') (info.plan.corrNodes[st.sel.id] || []).forEach((n) => n.classList.add('ed-sel'));
   if (st.sel?.kind === 'room') info.plan.nodes[st.sel.id]?.classList.add('sel');
   else if (st.sel?.kind === 'lift') svg.querySelector(`[data-lift="${st.sel.id}"]`)?.classList.add('ed-sel');
   else if (st.sel) info.plan.objects[st.sel.id]?.classList.add('ed-sel');
@@ -193,6 +232,33 @@ function render() {
   }
   drawUi();
   $('#showcams').checked = !!layer.settings.showCams;
+}
+
+// Millimeterpapier: feine Linie je mm, kräftiger je 5 mm und je cm
+function drawGrid(g) {
+  const defs = el('defs', {}, g);
+  const pat = el('pattern', { id: 'mmgrid', width: MM * 10, height: MM * 10, patternUnits: 'userSpaceOnUse' }, defs);
+  for (let i = 0; i < 10; i++) {
+    const cls = i === 0 ? 'mm-major' : i === 5 ? 'mm-mid' : 'mm-minor';
+    el('line', { x1: i * MM, y1: 0, x2: i * MM, y2: MM * 10, class: cls }, pat);
+    el('line', { x1: 0, y1: i * MM, x2: MM * 10, y2: i * MM, class: cls }, pat);
+  }
+  const b = level.bounds;
+  const pad = 3000;
+  const x0 = Math.floor((b[0] - pad) / 100) * 100;
+  const y0 = Math.floor((b[1] - pad) / 100) * 100;
+  el('rect', { x: x0, y: y0, width: b[2] - x0 + pad, height: b[3] - y0 + pad, fill: 'url(#mmgrid)' }, g);
+}
+
+// Anfasser zum Ändern der Größe (Raum-Teilflächen, Korridor)
+const CORNERS = [[0, 1], [2, 1], [2, 3], [0, 3]];
+function drawHandles() {
+  const sel = st.sel;
+  if (!sel || st.tool !== 'select') return;
+  const r = 6 * (st.vb ? Math.max(0.6, st.vb.w / (svg.clientWidth || 1000)) : 1);
+  const put = (rect, tag) => CORNERS.forEach(([cx, cy], k) => el('rect', { x: rect[cx] - r, y: rect[cy] - r, width: r * 2, height: r * 2, class: 'ed-handle', 'data-phandle': `${tag}:${k}` }, ui));
+  if (sel.kind === 'room') roomById(sel.id)?.rects.forEach((rc, i) => put(rc, `room:${i}`));
+  if (sel.kind === 'corr' && level.corridors[sel.id]) put(level.corridors[sel.id], 'corr:0');
 }
 
 // Vorschau: Tür-Geist, Linienvorschau (wird bei Mausbewegung aktualisiert)
@@ -208,6 +274,13 @@ function drawUi(pt) {
       const r = d.o === 'h' ? { x: d.x - d.len / 2, y: d.y - 4.5, width: d.len, height: 9 } : { x: d.x - 4.5, y: d.y - d.len / 2, width: 9, height: d.len };
       el('rect', { ...r, class: `ly-door sec-${st.sec} ed-ghost` }, uiTemp);
     }
+  } else if (st.drag?.type === 'draw') {
+    const rc = drawRect(st.drag, pt);
+    if (rc) el('rect', { x: rc[0], y: rc[1], width: rc[2] - rc[0], height: rc[3] - rc[1], class: 'ed-draw' }, uiTemp);
+  } else if (['proom', 'cnarrow', 'cwide', 'plift'].includes(st.tool)) {
+    const p = snapP(pt);
+    if (st.tool === 'plift') el('rect', { x: p.x, y: p.y, width: 100, height: 50, class: 'ed-draw' }, uiTemp);
+    else el('circle', { cx: p.x, cy: p.y, r: 4, class: 'ed-snapdot' }, uiTemp);
   } else if (st.tool === 'line') {
     const p = { x: snap(pt.x), y: snap(pt.y) };
     if (st.lineStart) {
@@ -234,16 +307,28 @@ function renderProps() {
   if (!sel) {
     const t = TOOLS.find((x) => x.id === st.tool);
     props.innerHTML = `
-      <h3>LEVEL 0</h3>
-      <div class="ed-row"><span class="dim">TÜREN</span><span>${layer.doors.length}</span></div>
-      <div class="ed-row"><span class="dim">TRENNLINIEN</span><span>${layer.lines.length}</span></div>
-      <div class="ed-row"><span class="dim">KAMERAS</span><span>${layer.cams.length}</span></div>
-      <div class="ed-row"><span class="dim">BENANNTE RÄUME</span><span>${Object.values(layer.rooms).filter((r) => r.name).length}</span></div>
+      <h3>KARTE</h3>
+      <label class="ed-field">NAME DER KARTE <input type="text" data-map="name" maxlength="40" value="${esc(MAP.name)}"></label>
+      <label class="ed-check ed-big"><input type="checkbox" data-map="terminal" ${MAP.terminal ? 'checked' : ''}> IM TERMINAL ANZEIGEN</label>
+      <div class="ed-crow">
+        <label class="ed-field">KORRIDOR SCHMAL (M) <input type="text" data-mapw="narrow" value="${m(MAP.narrow)}"></label>
+        <label class="ed-field">KORRIDOR BREIT (M) <input type="text" data-mapw="wide" value="${m(MAP.wide)}"></label>
+      </div>
+      <div class="ed-btns"><button data-act="map-new">+ NEUE KARTE</button><button data-act="map-copy">KOPIEREN</button><button class="danger" data-act="map-del" ${plans.maps.length < 2 ? 'disabled' : ''}>LÖSCHEN</button></div>
+      <h3 class="ed-h3">EBENE</h3>
+      <label class="ed-field">NAME DER EBENE <input type="text" data-lvl="name" maxlength="40" value="${esc(level.name)}"></label>
+      <div class="ed-btns"><button data-act="lvl-new">+ NEUE EBENE</button><button data-act="lvl-up" ${cur.li === 0 ? 'disabled' : ''}>↑</button><button data-act="lvl-down" ${cur.li >= MAP.levels.length - 1 ? 'disabled' : ''}>↓</button><button class="danger" data-act="lvl-del" ${MAP.levels.length < 2 ? 'disabled' : ''}>LÖSCHEN</button></div>
+      <div class="ed-row"><span class="dim">RÄUME</span><span>${level.rooms.length}</span></div>
+      <div class="ed-row"><span class="dim">KORRIDORE</span><span>${level.corridors.length}</span></div>
+      <div class="ed-row"><span class="dim">AUFZÜGE</span><span>${level.lifts.length}</span></div>
+      <div class="ed-row"><span class="dim">TÜREN · KAMERAS</span><span>${layer.doors.length} · ${layer.cams.length}</span></div>
+      <p class="ed-note"><b>Raster:</b> 1 Kästchen = 1 mm = 0,5 m · dicke Linie = 1 cm = 5 m. Im Terminal wechselt Strg + „+“ / Strg + „−“ die Ebene; Reihenfolge wie hier (↑ ↓).</p>
       <p class="ed-note">${esc(t.hint)}</p>
       <p class="ed-note"><b>Sicherheitsstufen</b><br>
         <span class="sec-t sec-green">GRÜN</span> – offen für alle<br>
         <span class="sec-t sec-orange">ORANGE</span> – Karte nötig, kein Zugang zu lebenswichtiger Infrastruktur und Mainframe<br>
         <span class="sec-t sec-red">ROT</span> – Vollzugriff</p>`;
+    bindMapProps();
     return;
   }
   if (sel.kind === 'label') {
@@ -313,8 +398,24 @@ function renderProps() {
       <label class="ed-field">NOTIZ (ERSCHEINT IM TERMINAL) <textarea data-k="info" maxlength="300">${esc(data.info)}</textarea></label>
       <div class="ed-field">PIKTOGRAMME (${pics.length}/${MAX_PICTOS})</div>
       <div class="ed-pics">${pics.map((p) => `<span class="ed-pic ${p.map ? 'on-map' : ''}" title="${esc(semioticById(p.id)?.name)}${p.map ? ' · auf der Karte' : ''}">${semioticSvg(p.id, 34)}</span>`).join('') || '<span class="dim">KEINE</span>'}</div>
-      <div class="ed-btns"><button data-detail>RAUMBESCHREIBUNG ÖFFNEN ▸</button><button data-reset>ZURÜCKSETZEN</button></div>`;
+      <div class="ed-btns"><button data-detail>RAUMBESCHREIBUNG ÖFFNEN ▸</button><button data-reset>ZURÜCKSETZEN</button></div>
+      <h3 class="ed-h3">GRUNDRISS</h3>
+      ${colorRows(room.fill, room.stroke, DEF.room)}
+      <div class="ed-btns"><button data-allcol="room">FARBEN FÜR ALLE RÄUME DER EBENE</button></div>
+      <div class="ed-field">TEILFLÄCHEN</div>
+      ${room.rects.map((r, i) => `<div class="ed-row"><span>TEIL ${i + 1}: ${m(r[2] - r[0])} × ${m(r[3] - r[1])} M</span>${room.rects.length > 1 ? `<button class="danger ed-mini" data-partdel="${i}">✕</button>` : ''}</div>`).join('')}
+      <div class="ed-btns"><button data-append>${st.append === room.id ? 'JETZT RECHTECK AUFZIEHEN …' : '+ TEILFLÄCHE ANBAUEN'}</button><button class="danger" data-pdel>RAUM LÖSCHEN</button></div>
+      <p class="ed-note">Gewählten Raum ziehen = verschieben (Türen, Kameras und Raum-ID wandern mit) · gelbe Ecken ziehen = Größe ändern.</p>`;
     bindRoomFields(props, room);
+    bindColors(room, 'room');
+    props.querySelector('[data-append]').addEventListener('click', () => { st.append = room.id; setTool('proom'); renderProps(); });
+    props.querySelector('[data-pdel]').addEventListener('click', () => deletePlanItem(sel));
+    props.querySelectorAll('[data-partdel]').forEach((b) => b.addEventListener('click', () => {
+      snapshot();
+      room.rects.splice(Number(b.dataset.partdel), 1);
+      commit();
+      renderProps();
+    }));
     props.querySelector('[data-detail]').addEventListener('click', () => openDetail(room.id));
     props.querySelector('[data-reset]').addEventListener('click', () => {
       if (!confirm('Alle Angaben zu diesem Raum löschen?')) return;
@@ -323,6 +424,18 @@ function renderProps() {
       commit();
       renderProps();
     });
+  } else if (sel.kind === 'corr') {
+    const c = level.corridors[sel.id];
+    const st0 = c[4] || {};
+    props.innerHTML = `
+      <h3>KORRIDOR</h3>
+      <div class="ed-row"><span class="dim">MASSE</span><span>${m(c[2] - c[0])} × ${m(c[3] - c[1])} M</span></div>
+      ${colorRows(st0.fill, st0.stroke, DEF.corr)}
+      <div class="ed-btns"><button data-allcol="corr">FARBEN FÜR ALLE KORRIDORE DER EBENE</button></div>
+      <div class="ed-btns"><button class="danger" data-pdel>KORRIDOR LÖSCHEN</button></div>
+      <p class="ed-note">Gewählten Korridor ziehen = verschieben · gelbe Ecken ziehen = Länge/Breite ändern. Wo Korridor- und Raumrahmen aufeinanderliegen, gilt der Korridorrahmen.</p>`;
+    bindColors(c, 'corr');
+    props.querySelector('[data-pdel]').addEventListener('click', () => deletePlanItem(sel));
   } else if (sel.kind === 'lift') {
     const lift = level.lifts.find((l) => l.id === sel.id);
     const data = liftData(lift, layer);
@@ -334,7 +447,20 @@ function renderProps() {
         <button class="ed-sec ${!data.sec ? 'on' : ''}" data-lsec=""><i style="background:transparent;border:1px solid var(--amber-dim)"></i>KEINE ANGABE</button>
         ${Object.entries(SECURITY).map(([k, v]) => `<button class="ed-sec ${data.sec === k ? 'on' : ''}" data-lsec="${k}"><i style="background:var(--sec-${k})"></i>${v.label}</button>`).join('')}
       </div>
-      <label class="ed-field">ZUGANG ZU <textarea data-k="access" maxlength="400" placeholder="z. B. LEVEL -1 · APOLLO MAINFRAME">${esc(data.access)}</textarea></label>`;
+      <div class="ed-field">ZUGANG ZU EBENEN DIESER KARTE</div>
+      ${MAP.levels.length > 1 ? MAP.levels.map((lv) => `<label class="ed-check"><input type="checkbox" data-liftlvl="${esc(lv.id)}" ${lv.id === LV.id ? 'checked disabled' : (data.levels || []).includes(lv.id) ? 'checked' : ''}> ${esc(lv.plan.name)}${lv.id === LV.id ? ' (HIER)' : ''}</label>`).join('') : '<p class="ed-note">Diese Karte hat nur eine Ebene. Weitere Ebenen legst du im Kartenfenster an (Esc, dann „+ NEUE EBENE“).</p>'}
+      <label class="ed-field">HINWEIS IM TERMINAL <textarea data-k="access" maxlength="400" placeholder="z. B. APOLLO MAINFRAME">${esc(data.access)}</textarea></label>
+      <div class="ed-btns"><button data-rot>↻ DREHEN</button><button class="danger" data-pdel>AUFZUG LÖSCHEN</button></div>
+      <p class="ed-note">Gewählten Aufzug ziehen = verschieben.</p>`;
+    props.querySelectorAll('[data-liftlvl]').forEach((cb) => cb.addEventListener('change', () => {
+      snapshot();
+      const set = new Set(liftData(lift, layer).levels || []);
+      if (cb.checked) set.add(cb.dataset.liftlvl); else set.delete(cb.dataset.liftlvl);
+      patchLift(lift.id, { levels: [...set] });
+      commit();
+    }));
+    props.querySelector('[data-rot]').addEventListener('click', () => { snapshot(); rotateLift(lift); commit(); });
+    props.querySelector('[data-pdel]').addEventListener('click', () => deletePlanItem(sel));
     props.querySelectorAll('[data-k]').forEach((inp) => {
       inp.addEventListener('focus', snapshot);
       inp.addEventListener('input', () => { patchLift(lift.id, { [inp.dataset.k]: inp.value.trim() ? inp.value : '' }); commit(); });
@@ -347,6 +473,129 @@ function renderProps() {
     }));
   }
   props.querySelector('[data-del]')?.addEventListener('click', () => remove(sel.kind, sel.id));
+}
+
+// ---------- Farben und Kartenverwaltung ----------
+
+const DEF = { room: { fill: '#3a2410', stroke: '#d4702c' }, corr: { fill: '#7a2418', stroke: '#a8361f' } };
+
+function colorRows(fill, stroke, def) {
+  const row = (k, label, v) => `<div class="ed-crow ed-colrow"><span class="ed-cname">${label}</span><input type="color" data-col="${k}" value="${v || def[k]}"><button class="ed-mini" data-coldef="${k}" ${v ? '' : 'disabled'}>STANDARD</button></div>`;
+  return row('fill', 'FLÄCHE', fill) + row('stroke', 'RAHMEN', stroke);
+}
+
+// obj: Raum (Farben als Eigenschaften) oder Korridor (Array, Farben im 5. Eintrag)
+function bindColors(obj, kind) {
+  const get = () => (kind === 'room' ? obj : (obj[4] = obj[4] || {}));
+  const set = (k, v) => {
+    const t = get();
+    if (v) t[k] = v; else delete t[k];
+    if (kind === 'corr' && !Object.keys(obj[4]).length) obj.length = 4;
+  };
+  props.querySelectorAll('[data-col]').forEach((inp) => {
+    inp.addEventListener('focus', snapshot, { once: true });
+    inp.addEventListener('pointerdown', snapshot, { once: true });
+    inp.addEventListener('input', () => { set(inp.dataset.col, inp.value); commit(); });
+    inp.addEventListener('change', () => renderProps());
+  });
+  props.querySelectorAll('[data-coldef]').forEach((b) => b.addEventListener('click', () => { snapshot(); set(b.dataset.coldef, ''); commit(); renderProps(); }));
+  props.querySelector('[data-allcol]')?.addEventListener('click', () => {
+    const src = kind === 'room' ? { fill: obj.fill, stroke: obj.stroke } : { ...(obj[4] || {}) };
+    if (!confirm(kind === 'room' ? 'Diese Farben für alle Räume der Ebene übernehmen?' : 'Diese Farben für alle Korridore der Ebene übernehmen?')) return;
+    snapshot();
+    if (kind === 'room') level.rooms.forEach((r) => { ['fill', 'stroke'].forEach((k) => { if (src[k]) r[k] = src[k]; else delete r[k]; }); });
+    else level.corridors.forEach((c, i) => { level.corridors[i] = Object.keys(src).length ? [...c.slice(0, 4), { ...src }] : c.slice(0, 4); });
+    commit();
+    renderProps();
+  });
+}
+
+function switchLevel(mi, li) {
+  cur.mi = mi;
+  cur.li = li;
+  bindLevel();
+  st.sel = null;
+  st.append = null;
+  st.undo = [];
+  st.redo = [];
+  updateButtons();
+  homeView();
+  render();
+  renderProps();
+  renderLevelPick();
+}
+
+function renderLevelPick() {
+  $('#levelpick').innerHTML = `<div class="ed-head">KARTE / EBENE</div>
+    <select id="lvl-sel" class="ed-lvlsel">${plans.maps.map((mp, i) => `<optgroup label="${esc(mp.name)}${mp.terminal ? '' : ' (NUR EDITOR)'}">${mp.levels.map((lv, j) => `<option value="${i}:${j}" ${i === cur.mi && j === cur.li ? 'selected' : ''}>${esc(lv.plan.name)}</option>`).join('')}</optgroup>`).join('')}</select>`;
+  $('#lvl-sel').addEventListener('change', (e) => { const [a, b] = e.target.value.split(':').map(Number); switchLevel(a, b); });
+  $('#ed-sub').textContent = `// ${MAP.name} · ${level.name}`;
+}
+
+const plansChanged = () => { savePlans(plans); renderLevelPick(); };
+
+function copyLayer(fromId, toId) {
+  saveLayer(toId, JSON.parse(JSON.stringify(loadLayer(fromId, LAYER_FALLBACK[fromId]))));
+}
+
+function bindMapProps() {
+  props.querySelector('[data-map="name"]').addEventListener('input', (e) => { MAP.name = e.target.value.toUpperCase() || 'KARTE'; plansChanged(); });
+  props.querySelector('[data-map="terminal"]').addEventListener('change', (e) => { MAP.terminal = e.target.checked; plansChanged(); });
+  props.querySelectorAll('[data-mapw]').forEach((inp) => inp.addEventListener('change', () => {
+    const v = Number(String(inp.value).replace(',', '.'));
+    if (v > 0) MAP[inp.dataset.mapw] = Math.round(v * UNITS_PER_M);
+    plansChanged();
+    renderProps();
+  }));
+  props.querySelector('[data-lvl="name"]').addEventListener('input', (e) => { LV.plan.name = e.target.value.toUpperCase() || 'EBENE'; level = asLevel(MAP, LV); plansChanged(); render(); });
+  const act = (k, fn) => props.querySelector(`[data-act="${k}"]`)?.addEventListener('click', fn);
+  act('map-new', () => {
+    const name = prompt('Name der neuen Karte:', 'NEUE KARTE');
+    if (!name) return;
+    plans.maps.push({ id: uid('m'), name: name.toUpperCase(), terminal: false, narrow: MAP.narrow, wide: MAP.wide, levels: [{ id: uid('l'), plan: emptyPlan('LEVEL 0') }] });
+    plansChanged();
+    switchLevel(plans.maps.length - 1, 0);
+  });
+  act('map-copy', () => {
+    const copy = JSON.parse(JSON.stringify(MAP));
+    copy.id = uid('m');
+    copy.name = `${MAP.name} (KOPIE)`;
+    copy.terminal = false;
+    copy.levels.forEach((lv, i) => { const old = MAP.levels[i].id; lv.id = uid('l'); copyLayer(old, lv.id); });
+    plans.maps.push(copy);
+    plansChanged();
+    switchLevel(plans.maps.length - 1, 0);
+    toast('KARTE KOPIERT – NUR IM EDITOR, BIS DU „IM TERMINAL ANZEIGEN“ SETZT');
+  });
+  act('map-del', () => {
+    if (!confirm(`Karte „${MAP.name}“ mit allen Ebenen löschen? Das kann nicht rückgängig gemacht werden.`)) return;
+    MAP.levels.forEach((lv) => { try { localStorage.removeItem(storageKey(lv.id)); } catch { /* egal */ } });
+    plans.maps.splice(cur.mi, 1);
+    plansChanged();
+    switchLevel(0, 0);
+  });
+  act('lvl-new', () => {
+    const name = prompt('Name der neuen Ebene:', `LEVEL -${MAP.levels.length}`);
+    if (!name) return;
+    MAP.levels.push({ id: uid('l'), plan: emptyPlan(name.toUpperCase()) });
+    plansChanged();
+    switchLevel(cur.mi, MAP.levels.length - 1);
+  });
+  const move = (dir) => {
+    const j = cur.li + dir;
+    [MAP.levels[cur.li], MAP.levels[j]] = [MAP.levels[j], MAP.levels[cur.li]];
+    plansChanged();
+    switchLevel(cur.mi, j);
+  };
+  act('lvl-up', () => move(-1));
+  act('lvl-down', () => move(1));
+  act('lvl-del', () => {
+    if (!confirm(`Ebene „${level.name}“ löschen? Das kann nicht rückgängig gemacht werden.`)) return;
+    try { localStorage.removeItem(storageKey(LV.id)); } catch { /* egal */ }
+    MAP.levels.splice(cur.li, 1);
+    plansChanged();
+    switchLevel(cur.mi, 0);
+  });
 }
 
 function bindRoomFields(root, room) {
@@ -389,6 +638,8 @@ function setTool(id) {
   svg.classList.toggle('tool-select', id === 'select');
   document.querySelectorAll('.ed-tool').forEach((b) => b.classList.toggle('on', b.dataset.tool === id));
   $('#pictos').hidden = id !== 'picto';
+  if (id !== 'proom') st.append = null;
+  if (ui) render();
   drawUi();
   if (!st.sel) renderProps();
 }
@@ -409,6 +660,16 @@ function onDown(e) {
   if (e.button !== 0) return;
   const pt = toMap(e);
 
+  const ph = e.target.closest?.('[data-phandle]');
+  if (ph && st.sel) { startResize(e, ph.dataset.phandle); return; }
+
+  if (st.tool === 'proom' || st.tool === 'cnarrow' || st.tool === 'cwide') {
+    st.drag = { type: 'draw', kind: st.tool === 'proom' ? 'room' : st.tool, start: snapP(pt) };
+    svg.setPointerCapture(e.pointerId);
+    return;
+  }
+  if (st.tool === 'plift') { placeLift(pt); return; }
+
   const handle = e.target.closest?.('[data-handle]');
   if (handle) {
     snapshot();
@@ -418,7 +679,12 @@ function onDown(e) {
   }
 
   const liftEl = e.target.closest?.('[data-lift]');
-  if (liftEl && (st.tool === 'select' || st.tool === 'room')) { select({ kind: 'lift', id: liftEl.dataset.lift }); return; }
+  if (liftEl && (st.tool === 'select' || st.tool === 'room')) {
+    const id = liftEl.dataset.lift;
+    if (st.tool === 'select' && st.sel?.kind === 'lift' && st.sel.id === id) { startPlanMove(e, pt, st.sel); return; }
+    select({ kind: 'lift', id });
+    return;
+  }
 
   if (st.tool === 'select') {
     const obj = objectAt(e);
@@ -433,6 +699,12 @@ function onDown(e) {
       select(obj);
       st.drag = { type: 'move', start: pt, orig: JSON.stringify(find(obj.kind, obj.id)), moved: false };
       svg.setPointerCapture(e.pointerId);
+      return;
+    }
+    // Gewählten Raum bzw. Korridor ziehen = verschieben
+    const at = planAt(pt);
+    if (at && st.sel && at.kind === st.sel.kind && at.id === st.sel.id && (at.kind === 'room' || at.kind === 'corr')) {
+      startPlanMove(e, pt, st.sel);
       return;
     }
     startPan(e, true);
@@ -710,6 +982,172 @@ function renderEquip(filter) {
   });
 }
 
+// ---------- Grundriss bearbeiten ----------
+
+const norm4 = (a, b) => [Math.min(a.x, b.x), Math.min(a.y, b.y), Math.max(a.x, b.x), Math.max(a.y, b.y)];
+
+// Rechteck beim Aufziehen: Raum frei, Korridor mit fester Breite entlang der Hauptrichtung
+function drawRect(d, pt) {
+  const a = d.start;
+  const b = snapP(pt);
+  if (d.kind === 'room') {
+    const r = norm4(a, b);
+    return r[2] - r[0] >= MM && r[3] - r[1] >= MM ? r : null;
+  }
+  const w = d.kind === 'cwide' ? MAP.wide : MAP.narrow;
+  const dx = b.x - a.x;
+  const dy = b.y - a.y;
+  if (Math.max(Math.abs(dx), Math.abs(dy)) < MM) return null;
+  if (Math.abs(dx) >= Math.abs(dy)) return [Math.min(a.x, b.x), a.y, Math.max(a.x, b.x), a.y + w];
+  return [a.x, Math.min(a.y, b.y), a.x + w, Math.max(a.y, b.y)];
+}
+
+function nextRoomId() {
+  let n = level.rooms.length + 1;
+  while (level.rooms.some((r) => r.id === `R-${n}`)) n++;
+  return `R-${n}`;
+}
+
+function finishDraw(d, pt) {
+  const rc = drawRect(d, pt);
+  if (!rc) return;
+  snapshot();
+  if (d.kind === 'room') {
+    const target = st.append && roomById(st.append);
+    if (target) {
+      target.rects.push(rc);
+      st.sel = { kind: 'room', id: target.id };
+    } else {
+      const room = { id: nextRoomId(), zone: '', label: '', rects: [rc], lines: [] };
+      level.rooms.push(room);
+      st.sel = { kind: 'room', id: room.id };
+    }
+    st.append = null;
+  } else {
+    level.corridors.push(rc);
+    st.sel = { kind: 'corr', id: level.corridors.length - 1 };
+  }
+  commit();
+  renderProps();
+}
+
+function placeLift(pt) {
+  const p = snapP(pt);
+  const used = new Set(level.lifts.map((l) => l.id));
+  const id = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('').find((c) => !used.has(c)) || `L${level.lifts.length + 1}`;
+  snapshot();
+  level.lifts.push({ id, rect: [p.x, p.y, p.x + 100, p.y + 50], dark: 'dl' });
+  st.sel = { kind: 'lift', id };
+  commit();
+  renderProps();
+}
+
+function rotateLift(l) {
+  const [x0, y0, x1, y1] = l.rect;
+  const cx = (x0 + x1) / 2;
+  const cy = (y0 + y1) / 2;
+  const w = y1 - y0;
+  const h = x1 - x0;
+  l.rect = [snap(cx - w / 2, SNAP), snap(cy - h / 2, SNAP), snap(cx - w / 2, SNAP) + w, snap(cy - h / 2, SNAP) + h];
+  const order = ['dl', 'dt', 'dr', 'db'];
+  l.dark = order[(order.indexOf(l.dark) + 1) % 4];
+}
+
+function deletePlanItem(sel) {
+  if (sel.kind === 'room') {
+    const room = roomById(sel.id);
+    if (!room || !confirm(`Raum ${roomCode(room, layer)} mit allen Angaben löschen?`)) return;
+    snapshot();
+    level.rooms = level.rooms.filter((r) => r !== room);
+    LV.plan.rooms = level.rooms;
+    delete layer.rooms[room.id];
+  } else if (sel.kind === 'corr') {
+    snapshot();
+    level.corridors.splice(sel.id, 1);
+  } else if (sel.kind === 'lift') {
+    snapshot();
+    level.lifts = level.lifts.filter((l) => l.id !== sel.id);
+    LV.plan.lifts = level.lifts;
+    delete layer.lifts[sel.id];
+  }
+  st.sel = null;
+  commit();
+  renderProps();
+}
+
+// Element am Punkt: Raum vor Korridor
+function planAt(pt) {
+  const room = roomAt(level, pt.x, pt.y);
+  if (room) return { kind: 'room', id: room.id };
+  const c = corridorAt(level, pt.x, pt.y);
+  if (c) return { kind: 'corr', id: level.corridors.indexOf(c) };
+  return null;
+}
+
+// Verschieben: Raum (mit Türen, Kameras und Raum-ID), Korridor, Aufzug
+function startPlanMove(e, pt, sel) {
+  const d = { type: 'pmove', sel, start: pt, moved: false };
+  if (sel.kind === 'room') {
+    const room = roomById(sel.id);
+    d.orig = JSON.stringify(room.rects);
+    d.doors = roomDoors(layer, room).map((x) => ({ o: x, x: x.x, y: x.y }));
+    d.cams = roomCams(layer, room).map((x) => ({ o: x, x: x.x, y: x.y }));
+    d.idPos = layer.rooms[room.id]?.idPos ? { ...layer.rooms[room.id].idPos } : null;
+  } else if (sel.kind === 'corr') {
+    d.orig = JSON.stringify(level.corridors[sel.id]);
+  } else if (sel.kind === 'lift') {
+    d.orig = JSON.stringify(level.lifts.find((l) => l.id === sel.id).rect);
+  }
+  st.drag = d;
+  svg.setPointerCapture(e.pointerId);
+}
+
+function movePlan(d, pt) {
+  const dx = snap(pt.x - d.start.x, SNAP);
+  const dy = snap(pt.y - d.start.y, SNAP);
+  if (!d.moved) {
+    if (Math.hypot(pt.x - d.start.x, pt.y - d.start.y) < 6) return;
+    d.moved = true;
+    snapshot();
+  }
+  const sh = (r) => [r[0] + dx, r[1] + dy, r[2] + dx, r[3] + dy, ...r.slice(4)];
+  const orig = JSON.parse(d.orig);
+  if (d.sel.kind === 'room') {
+    roomById(d.sel.id).rects = orig.map(sh);
+    d.doors.forEach((x) => { x.o.x = x.x + dx; x.o.y = x.y + dy; });
+    d.cams.forEach((x) => { x.o.x = x.x + dx; x.o.y = x.y + dy; });
+    if (d.idPos) layer.rooms[d.sel.id].idPos = { x: d.idPos.x + dx, y: d.idPos.y + dy };
+  } else if (d.sel.kind === 'corr') {
+    level.corridors[d.sel.id] = sh(orig);
+  } else if (d.sel.kind === 'lift') {
+    level.lifts.find((l) => l.id === d.sel.id).rect = sh(orig);
+  }
+  render();
+}
+
+// Größe ändern über einen Eckanfasser
+function startResize(e, tag) {
+  const [kind, part, corner] = tag.split(':');
+  const rect = kind === 'room' ? roomById(st.sel.id).rects[Number(part)] : level.corridors[st.sel.id];
+  st.drag = { type: 'resize', kind, part: Number(part), corner: Number(corner), orig: rect.slice(), moved: false };
+  snapshot();
+  svg.setPointerCapture(e.pointerId);
+}
+
+function resizePlan(d, pt) {
+  const p = snapP(pt);
+  const r = d.orig.slice();
+  const [ix, iy] = CORNERS[d.corner];
+  r[ix] = p.x;
+  r[iy] = p.y;
+  const out = [Math.min(r[0], r[2]), Math.min(r[1], r[3]), Math.max(r[0], r[2]), Math.max(r[1], r[3]), ...d.orig.slice(4)];
+  if (out[2] - out[0] < SNAP || out[3] - out[1] < SNAP) return;
+  d.moved = true;
+  if (d.kind === 'room') roomById(st.sel.id).rects[d.part] = out;
+  else level.corridors[st.sel.id] = out;
+  render();
+}
+
 function startPan(e, clickSelectsRoom = false) {
   st.drag = { type: 'pan', sx: e.clientX, sy: e.clientY, vb: { ...st.vb }, moved: false, clickSelectsRoom, pt: toMap(e) };
   svg.setPointerCapture(e.pointerId);
@@ -734,6 +1172,9 @@ function onMove(e) {
     render();
     return;
   }
+  if (d.type === 'draw') { drawUi(pt); return; }
+  if (d.type === 'pmove') { movePlan(d, pt); return; }
+  if (d.type === 'resize') { resizePlan(d, pt); return; }
   if (d.type === 'rid') {
     if (!d.moved) {
       if (Math.hypot(pt.x - d.start.x, pt.y - d.start.y) < 4) return;
@@ -778,11 +1219,12 @@ function onUp(e) {
   svg.classList.remove('panning');
   if (!d) return;
   if (d.type === 'pan' && !d.moved && d.clickSelectsRoom) {
-    const room = roomAt(level, d.pt.x, d.pt.y);
-    select(room ? { kind: 'room', id: room.id } : null);
+    select(planAt(d.pt));
     return;
   }
-  if (d.type === 'handle' || ((d.type === 'move' || d.type === 'rid') && d.moved)) {
+  if (d.type === 'draw') { finishDraw(d, toMap(e)); drawUi(); return; }
+  if (d.type === 'resize' && !d.moved) { st.undo.pop(); updateButtons(); return; }
+  if (d.type === 'handle' || ((d.type === 'move' || d.type === 'rid' || d.type === 'pmove' || d.type === 'resize') && d.moved)) {
     commit();
     renderProps();
   }
@@ -791,8 +1233,14 @@ function onUp(e) {
 
 // ---------- Export / Import ----------
 
+// Export: alle Karten mit Ebenen, deren Türen/Kameras/Raumdaten, Ausrüstung und Terminal-Texte
 function exportLayer() {
-  download(new Blob([JSON.stringify({ format: 'apollo-map-layer', level: LV.id, version: 4, layer, equipment: exportEquipment(), content: currentContent() }, null, 2)], { type: 'application/json' }), `apollo-${LV.id}-karte.json`);
+  const layers = {};
+  plans.maps.forEach((mp) => mp.levels.forEach((lv) => { layers[lv.id] = lv.id === LV.id ? layer : loadLayer(lv.id, LAYER_FALLBACK[lv.id]); }));
+  const clean = JSON.parse(JSON.stringify(plans));
+  clean.maps.forEach((mp) => mp.levels.forEach((lv) => { delete lv.plan.bounds; delete lv.plan.mapName; }));
+  const data = { format: 'apollo-map-layer', version: 5, level: LV.id, layer, plans: clean, layers, equipment: exportEquipment(), content: currentContent() };
+  download(new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' }), 'apollo-karten.json');
 }
 
 function download(blob, name) {
@@ -826,6 +1274,7 @@ const DESC_LABELS = {
   sight: 'Was sieht man',
   sound: 'Was hört man',
   investigate: 'Was erfährt man nach genauerer Untersuchung',
+  interact: 'Interaktion',
 };
 
 function roomListBlocks() {
@@ -890,6 +1339,17 @@ function importFile(file) {
   reader.onload = () => {
     try {
       const data = JSON.parse(reader.result);
+      if (data.plans) {
+        // Neues Format: alle Karten und Ebenen ersetzen
+        plans = normPlans(data.plans);
+        savePlans(plans);
+        Object.entries(data.layers || {}).forEach(([id, l]) => saveLayer(id, importLayer(l)));
+        if (data.equipment) importEquipment(data.equipment);
+        if (data.content) { saveContent(data.content); contentEd?.refresh(); }
+        switchLevel(0, 0);
+        toast('KARTEN IMPORTIERT');
+        return;
+      }
       snapshot();
       layer = importLayer(data.layer || data);
       if (data.equipment) importEquipment(data.equipment);
@@ -914,7 +1374,7 @@ function initTabs() {
   const tabs = CONTENT_TABS;
   $('#tabs').innerHTML = tabs.map(([k, t]) => `<button class="ed-tab" data-tab="${k}">${t}</button>`).join('');
   contentEd = createContentEditor($('#content'), {
-    level,
+    getLevel: () => level,
     getLayer: () => layer,
     setRoomStatus: (id, status) => { snapshot(); patchRoom(id, { status }); commit(); },
     toast,
@@ -923,7 +1383,7 @@ function initTabs() {
     document.querySelectorAll('.ed-tab').forEach((b) => b.classList.toggle('on', b.dataset.tab === k));
     document.body.classList.toggle('tab-content', k !== 'map');
     $('#content').hidden = k === 'map';
-    $('#ed-sub').textContent = k === 'map' ? `// ${level.name}` : '// TERMINAL-INHALTE';
+    $('#ed-sub').textContent = k === 'map' ? `// ${MAP.name} · ${level.name}` : '// TERMINAL-INHALTE';
     if (k === 'map') { render(); renderProps(); } else contentEd.show(k);
     try { sessionStorage.setItem('apollo.editor.tab', k); } catch { /* egal */ }
   };
@@ -934,8 +1394,10 @@ function initTabs() {
 }
 
 function init() {
-  $('#ed-sub').textContent = `// ${level.name}`;
-  $('#tools').innerHTML = TOOLS.map((t) => `<button class="ed-tool" data-tool="${t.id}"><span class="k">${t.key}</span>${t.label}</button>`).join('');
+  renderLevelPick();
+  const toolBtn = (t) => `<button class="ed-tool" data-tool="${t.id}"><span class="k">${t.key.toUpperCase()}</span>${t.label}</button>`;
+  $('#tools').innerHTML = TOOLS.filter((t) => !t.plan).map(toolBtn).join('')
+    + `<div class="ed-head">GRUNDRISS</div>${TOOLS.filter((t) => t.plan).map(toolBtn).join('')}`;
   $('#secs').innerHTML = Object.entries(SECURITY).map(([k, v]) => `<button class="ed-sec" data-sec="${k}"><i style="background:var(--sec-${k})"></i>${v.label}</button>`).join('');
   document.querySelectorAll('.ed-tool').forEach((b) => b.addEventListener('click', () => setTool(b.dataset.tool)));
   document.querySelectorAll('#secs .ed-sec').forEach((b) => b.addEventListener('click', () => setSec(b.dataset.sec)));
@@ -991,10 +1453,14 @@ function init() {
     if ((e.ctrlKey || e.metaKey) && k === 'z') { e.preventDefault(); if (e.shiftKey) redo(); else undo(); return; }
     if ((e.ctrlKey || e.metaKey) && k === 'y') { e.preventDefault(); redo(); return; }
     if (e.ctrlKey || e.metaKey || e.altKey) return;
-    const t = TOOLS.find((x) => x.key === e.key);
+    const t = TOOLS.find((x) => x.key === k);
     if (t) { setTool(t.id); return; }
-    if (k === 'escape') { if (st.lineStart) { st.lineStart = null; drawUi(); } else select(null); return; }
-    if ((k === 'delete' || k === 'backspace') && st.sel && st.sel.kind !== 'room') { e.preventDefault(); remove(st.sel.kind, st.sel.id); return; }
+    if (k === 'escape') { if (st.lineStart) { st.lineStart = null; drawUi(); } else { st.append = null; select(null); } return; }
+    if ((k === 'delete' || k === 'backspace') && st.sel) {
+      e.preventDefault();
+      if (['room', 'corr', 'lift'].includes(st.sel.kind)) deletePlanItem(st.sel); else remove(st.sel.kind, st.sel.id);
+      return;
+    }
     if (k === 'g') setSec('green');
     if (k === 'o') setSec('orange');
     if (k === 'r') setSec('red');
@@ -1002,7 +1468,8 @@ function init() {
 
   // Änderungen aus einem anderen Editor-Fenster übernehmen
   addEventListener('storage', (e) => {
-    if (e.key === `apollo.map.${LV.id}.v2`) { layer = loadLayer(LV.id, LV.layer); validateSel(); render(); renderProps(); }
+    if (e.key === storageKey(LV.id)) { layer = loadLayer(LV.id, LAYER_FALLBACK[LV.id]); validateSel(); render(); renderProps(); }
+    if (e.key === PLANS_KEY) { plans = loadPlans(); bindLevel(); validateSel(); render(); renderProps(); renderLevelPick(); }
   });
 
   homeView();

@@ -296,10 +296,10 @@ body.crt .crt-overlay::after {
 /* ---------- Stationsplan ---------- */
 .map.lvl-station .hud, .map.lvl-station .hud-ruler { display: none; }
 :root { --map-room: #3a2410; --map-corr: #7a2418; --map-corr-edge: #a8361f; }
-.st-corr-edge { fill: var(--map-corr-edge); stroke: var(--map-corr-edge); stroke-width: 3; }
-.st-corr { fill: var(--map-corr); }
-.st-fill { fill: var(--map-room); }
-.st-wall { fill: none; stroke: var(--amber); stroke-width: 1.6; }
+.st-corr-edge { fill: var(--cs, var(--map-corr-edge)); stroke: var(--cs, var(--map-corr-edge)); stroke-width: 3; }
+.st-corr { fill: var(--cf, var(--map-corr)); }
+.st-fill { fill: var(--rf, var(--map-room)); }
+.st-wall { fill: none; stroke: var(--rs, var(--amber)); stroke-width: 1.6; }
 .st-inner { stroke: var(--amber-dim); stroke-width: 1; }
 .st-shaft { fill: #0f0806; stroke: var(--amber-dim); stroke-width: 1; }
 .st-rung { stroke: var(--amber-dim); stroke-width: 1; }
@@ -433,3 +433,9 @@ body.destruct .screen::after { content: ''; position: absolute; inset: 0; pointe
 @keyframes detflash { 0% { opacity: 1; } 15% { opacity: 1; background: #ffb060; } 100% { opacity: 0; } }
 .det-text { position: relative; color: var(--red); font-size: 40px; font-weight: 700; letter-spacing: .2em; opacity: 0; animation: dettext .1s 2.4s forwards; }
 @keyframes dettext { to { opacity: 1; } }
+
+/* Aufzugsmenü im Stationsplan */
+.sp-go { cursor: pointer; }
+.sp-go:hover { color: var(--yellow); }
+.sp-go.here { color: var(--mint); }
+.map .st-lift { cursor: pointer; }

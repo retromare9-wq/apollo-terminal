@@ -14,6 +14,7 @@ export function roomName(level, room, layer) {
   if (room.name) return room.name;
   if (room.unit) return `${room.kind === 'family' ? 'FAMILIENQUARTIER' : 'EINZELQUARTIER'} ${room.unit}`;
   const zone = level.zones[room.zone] || room.zone.toUpperCase();
+  if (!zone) return room.id;
   if (room.label) return `${zone} ${room.label}`;
   return `${zone} ${room.id.split('-').slice(1).join('-')}`;
 }
@@ -26,7 +27,7 @@ export function roomIdPos(room, layer) {
   const b = bbox(room.rects);
   return { x: b[0] + 6, y: b[1] + 6 };
 }
-export const roomZone = (level, room, layer) => layer?.rooms?.[room.id]?.zoneName || level.zones[room.zone] || room.zone.toUpperCase();
+export const roomZone = (level, room, layer) => layer?.rooms?.[room.id]?.zoneName || level.zones[room.zone] || room.zone.toUpperCase() || '–';
 export const liftData = (l, layer) => ({ letter: l.id === 'MF' ? '' : l.id, sec: '', access: '', ...(layer?.lifts?.[l.id] || {}) });
 
 // Schrift skaliert beim Herauszoomen mit und verschwindet bei großer Entfernung.
@@ -79,12 +80,7 @@ function lift(g, l, layer) {
 
 // Bereichsüberschriften: Vorgabe aus dem Grundriss, überschrieben/ergänzt durch den Editor
 export function planLabels(level, layer) {
-  const all = [...level.corridors, ...level.rooms.flatMap((r) => r.rects)];
-  const exit = all.reduce((m, c) => (c[2] > m[2] ? c : m));
-  const base = [
-    ...level.labels.map((l, i) => ({ id: `lbl${i}`, text: l.text, x: l.x, y: l.y })),
-    { id: 'lbl-exit', text: 'ZUM FLUGFELD ▶', x: exit[2] + 30, y: (exit[1] + exit[3]) / 2 },
-  ];
+  const base = (level.labels || []).map((l, i) => ({ id: l.id || `lbl${i}`, text: l.text, x: l.x, y: l.y }));
   const over = layer?.labels || {};
   const out = base.map((l) => ({ ...l, ...(over[l.id] || {}) }));
   for (const [id, l] of Object.entries(over)) if (l.custom) out.push({ id, ...l });
@@ -93,24 +89,34 @@ export function planLabels(level, layer) {
 
 // layer: editierbare Ebene (Türen, Linien, Kameras, Raumdaten), opts: { cams, editor }
 export function drawStationPlan(g, cfg, level, layer, opts = {}) {
-  const [bx0, by0, bx1, by1] = level.bounds;
+  const [bx0, by0, bx1, by1] = level.bounds || [0, 0, 1000, 600];
   const statusOf = (id) => layer.rooms[id]?.status || '';
 
-  const corr = el('g', { class: 'st-corrs' }, g);
-  // Erst eine Kontur um alle Gänge, dann die Füllung – so entstehen an Kreuzungen keine Nähte
-  level.corridors.forEach(([x0, y0, x1, y1]) => el('rect', { x: x0, y: y0, width: x1 - x0, height: y1 - y0, class: 'st-corr-edge' }, corr));
-  level.corridors.forEach(([x0, y0, x1, y1]) => el('rect', { x: x0, y: y0, width: x1 - x0, height: y1 - y0, class: 'st-corr' }, corr));
+  // Farben aus dem Editor über CSS-Variablen, damit Statusfarben (Schaden usw.) Vorrang behalten
+  const colors = (fill, stroke, f, s) => [fill ? `${f}:${fill}` : '', stroke ? `${s}:${stroke}` : ''].filter(Boolean).join(';');
 
   const roomLayer = el('g', {}, g);
   const nodes = {};
   level.rooms.forEach((room) => {
     const status = statusOf(room.id);
-    const rg = el('g', { class: `st-room z-${room.zone}${status ? ` s-${status}` : ''}`, 'data-id': room.id }, roomLayer);
+    const style = colors(room.fill, room.stroke, '--rf', '--rs');
+    const rg = el('g', { class: `st-room z-${room.zone}${status ? ` s-${status}` : ''}`, 'data-id': room.id, ...(style ? { style } : {}) }, roomLayer);
     room.rects.forEach(([x0, y0, x1, y1]) => el('rect', { x: x0, y: y0, width: x1 - x0, height: y1 - y0, class: 'st-fill' }, rg));
     room.lines.forEach(([x0, y0, x1, y1]) => el('line', { x1: x0, y1: y0, x2: x1, y2: y1, class: 'st-inner' }, rg));
     room.rects.forEach(([x0, y0, x1, y1]) => el('rect', { x: x0, y: y0, width: x1 - x0, height: y1 - y0, class: 'st-wall' }, rg));
     nodes[room.id] = rg;
   });
+
+  // Korridore nach den Räumen: Korridorrahmen hat Vorrang vor Raumrahmen.
+  // Erst alle Rahmen, dann alle Füllungen – so entstehen an Kreuzungen keine Nähte.
+  const corr = el('g', { class: 'st-corrs' }, g);
+  const corrNodes = [];
+  const cAttr = (c, i, cls) => {
+    const style = colors(c[4]?.fill, c[4]?.stroke, '--cf', '--cs');
+    return { x: c[0], y: c[1], width: c[2] - c[0], height: c[3] - c[1], class: cls, 'data-corr': i, ...(style ? { style } : {}) };
+  };
+  level.corridors.forEach((c, i) => { corrNodes[i] = [el('rect', cAttr(c, i, 'st-corr-edge'), corr)]; });
+  level.corridors.forEach((c, i) => { corrNodes[i].push(el('rect', cAttr(c, i, 'st-corr'), corr)); });
 
   const objects = drawLayer(el('g', {}, g), level, layer, {
     cams: opts.cams ?? layer.settings.showCams,
@@ -157,10 +163,10 @@ export function drawStationPlan(g, cfg, level, layer, opts = {}) {
 
   const home = frame([bx0, by0, bx1, by1], 90);
   return {
-    title: `STATIONSPLAN ${cfg.stationCode} // ${level.name}`,
+    title: `STATIONSPLAN ${level.mapName || cfg.stationCode} // ${level.name}`,
     target: { x: home.x + home.w / 2, y: home.y + home.h / 2 },
     home,
     noLock: true,
-    plan: { level, layer, nodes, objects: { ...objects, ...labelNodes } },
+    plan: { level, layer, nodes, corrNodes, objects: { ...objects, ...labelNodes } },
   };
 }

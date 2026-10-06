@@ -86,7 +86,7 @@ function shrinkImage(file, max = 320) {
   });
 }
 
-export function createContentEditor(root, { level, getLayer, setRoomStatus, toast }) {
+export function createContentEditor(root, { getLevel, getLayer, setRoomStatus, toast }) {
   let c = currentContent();
   let tab = 'general';
   let topicIdx = 0;
@@ -97,7 +97,7 @@ export function createContentEditor(root, { level, getLayer, setRoomStatus, toas
     saveTimer = setTimeout(() => saveContent(c), 250);
   };
 
-  const roomOptions = () => [['', '– KEIN RAUM –'], ...level.rooms.map((r) => [r.id, r.id])];
+  const roomOptions = () => [['', '– KEIN RAUM –'], ...getLevel().rooms.map((r) => [r.id, r.id])];
 
   // ---------- Reiter ----------
 
@@ -218,6 +218,7 @@ export function createContentEditor(root, { level, getLayer, setRoomStatus, toas
       const base = `topics.${ti}.damage`;
       const d = c.topics[ti].damage;
       const layer = getLayer();
+      const level = getLevel();
       const statusRooms = level.rooms.filter((r) => layer.rooms[r.id]?.status);
       return `
       <div class="ed-cgrid">

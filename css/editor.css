@@ -176,3 +176,18 @@ body.tab-content .map-only, body.tab-content .ed-tools, body.tab-content .ed-can
 .ed-actions { gap: 5px; }
 .ed-top .ed-actions button, .ed-top .ed-actions .btn { padding: 5px 7px; font-size: 11px; letter-spacing: .03em; }
 .ed-check { margin: 0 2px; font-size: 11px; }
+
+/* Millimeterpapier und Grundriss */
+.mm-minor { stroke: #24110a; stroke-width: 1; vector-effect: non-scaling-stroke; }
+.mm-mid { stroke: #3a1a0c; stroke-width: 1; vector-effect: non-scaling-stroke; }
+.mm-major { stroke: #5c2912; stroke-width: 1.2; vector-effect: non-scaling-stroke; }
+svg.z-mid .mm-minor { stroke: transparent; }
+.ed-draw { fill: rgba(227, 203, 92, .18); stroke: var(--yellow); stroke-width: 1.5; stroke-dasharray: 6 4; vector-effect: non-scaling-stroke; pointer-events: none; }
+.editor .st-corr.ed-sel, .editor .st-corr-edge.ed-sel { stroke: var(--yellow); stroke-width: 3; }
+.editor [data-phandle] { cursor: nwse-resize; }
+.ed-lvlsel { width: 100%; margin-bottom: 12px; background: #120905; color: var(--amber); border: 2px solid var(--amber-dim); font: 700 13px var(--font); padding: 5px; }
+.ed-h3 { margin-top: 18px !important; border-top: 2px solid var(--rust-2); padding-top: 10px; }
+.ed-colrow { align-items: center !important; margin: 4px 0; }
+.ed-colrow input[type=color] { width: 54px; height: 30px; border: 2px solid var(--amber-dim); background: #120905; padding: 1px; cursor: pointer; }
+.editor button.ed-mini { padding: 3px 7px; font-size: 10px; }
+.ed-big { font-size: 13px; margin: 8px 0 4px; }

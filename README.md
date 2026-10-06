@@ -72,6 +72,27 @@ Schlüsselwörtern und einem oder mehreren Inhaltsbausteinen (Text, Warnmeldung,
 Alle Texte werden im Browser gespeichert, das Terminal übernimmt sie sofort. **Exportieren**
 sichert Karte, Ausrüstung und Texte in einer Datei.
 
+### Karten und Ebenen
+
+Im Reiter STATION oben links **KARTE / EBENE** wählen. Mit Esc (nichts ausgewählt) erscheint rechts
+das Kartenfenster: Karte umbenennen, **IM TERMINAL ANZEIGEN** an/aus, neue Karte, Kopie, Ebenen
+anlegen, sortieren und löschen, Korridorbreiten einstellen.
+
+Raster wie Millimeterpapier: 1 Kästchen = 1 mm = 0,5 m, dicke Linie = 1 cm = 5 m.
+
+| Taste | Grundriss |
+|---|---|
+| Q | Raum zeichnen (Rechteck aufziehen; „+ TEILFLÄCHE“ baut an einen Raum an) |
+| W / E | Korridor schmal / breit (Strecke ziehen, feste Breite) |
+| A | Aufzug setzen (drehen, Ebenen zuordnen im Aufzugsfenster) |
+| 1 | Raum/Korridor/Aufzug anklicken, dann ziehen = verschieben, gelbe Ecken = Größe |
+
+Räume und Korridore bekommen eigene Farben für Fläche und Rahmen. Wo Korridor- und Raumrahmen
+aufeinanderliegen, gilt der Korridorrahmen.
+
+Im Terminal wechselt **Strg + „+“ / Strg + „−“** (oder Bild↑/↓) die Ebene; ein Klick auf einen
+Aufzug – oder sein Buchstabe + Enter – zeigt die erreichbaren Ebenen, eine Ziffer wählt sie.
+
 ### Stationsplan
 
 `editor.html` – Türen (Sicherheitsstufe Grün / Orange / Rot), graue Trennlinien, Kameras mit
@@ -95,7 +116,7 @@ Aufzüge anklicken öffnet das Aufzugsmenü (Buchstabe, Sicherheitsstufe, „Zug
 **Raumliste PDF/ODT** exportiert alle Räume mit sämtlichen Angaben.
 
 Gespeichert wird automatisch im Browser; ein offenes Terminal im selben Browser übernimmt
-Änderungen sofort. **Exportieren** lädt die Ebene als JSON-Datei herunter (Sicherung oder
+Änderungen sofort. **Exportieren** lädt alle Karten und Ebenen als JSON-Datei herunter (Sicherung oder
 Übertragung auf ein anderes Gerät per **Importieren**). Eine exportierte Datei kann als
 Vorgabe in `js/station-layer0.js` übernommen werden.
 

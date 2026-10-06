@@ -4,7 +4,7 @@
 
 import { el, txt, rng } from './svg.js';
 import { drawStarmap, SOL } from './starmap.js';
-import { drawStationPlan, roomName, roomCode, roomZone, frame, applyZoom } from './stationplan.js';
+import { drawStationPlan, roomName, roomCode, roomZone, frame, applyZoom, liftData } from './stationplan.js';
 import { semioticSvg } from './semiotic.js';
 import { loadLayer, roomDoors, roomCams, SECURITY } from './layer.js';
 
@@ -147,8 +147,13 @@ function drawMoon(g, cfg) {
   };
 }
 
-function drawStation(g, cfg, station) {
-  const lv = station.levels[0];
+function drawStation(g, cfg, station, idx = 0) {
+  const lv = station.levels[idx] || station.levels[0];
+  if (!lv) {
+    const info = drawStationPlan(g, cfg, { name: 'KEIN PLAN', zones: {}, rooms: [], corridors: [], lifts: [], labels: [] }, loadLayer('none'));
+    txt(g, 500, 223, 'KEIN STATIONSPLAN FREIGEGEBEN', 'm-label', { 'text-anchor': 'middle' });
+    return info;
+  }
   return drawStationPlan(g, cfg, lv.plan, loadLayer(lv.id, lv.layer));
 }
 
@@ -172,6 +177,82 @@ export class MapView {
     this.token = 0;
     this.level = -1;
     this.animating = false;
+    this.stIdx = 0;
+    // Aufzug im Stationsplan anklicken: erreichbare Ebenen anzeigen
+    this.svg.addEventListener('click', (e) => {
+      const l = e.target.closest?.('[data-lift]');
+      if (l && this.info?.plan && !this.animating) this.showLift(l.dataset.lift);
+      const go = e.target.closest?.('[data-goto]');
+      if (go) this.gotoLevel(Number(go.dataset.goto));
+    });
+    this.panel.addEventListener('click', (e) => {
+      const go = e.target.closest?.('[data-goto]');
+      if (go) this.gotoLevel(Number(go.dataset.goto));
+    });
+  }
+
+  // ---------- Ebenen des Stationsplans ----------
+
+  get stationLevels() { return this.station.levels || []; }
+
+  // Andere Ebene zeigen (Strg + / Strg -, Aufzug)
+  gotoLevel(idx) {
+    const n = this.stationLevels.length;
+    if (!this.info?.plan || this.animating || idx < 0 || idx >= n || idx === this.stIdx) return false;
+    this.stIdx = idx;
+    this.liftChoices = null;
+    this.sound.confirm();
+    this.show(this.level, { arrive: 'zoom' });
+    return true;
+  }
+
+  stepLevel(dir) {
+    const n = this.stationLevels.length;
+    if (n < 2) return false;
+    return this.gotoLevel(Math.min(n - 1, Math.max(0, (this.stIdx || 0) + dir)));
+  }
+
+  // Aufzug anhand des Buchstabens finden
+  findLift(query) {
+    if (!this.info?.plan) return null;
+    const q = String(query).trim().toUpperCase().replace(/^(AUFZUG|LIFT)\s*/, '');
+    if (!q) return null;
+    const { level, layer } = this.info.plan;
+    const l = level.lifts.find((x) => liftData(x, layer).letter.toUpperCase() === q);
+    return l ? l.id : null;
+  }
+
+  showLift(id) {
+    const { level, layer } = this.info.plan;
+    const lift = level.lifts.find((l) => l.id === id);
+    if (!lift) return;
+    const d = liftData(lift, layer);
+    const levels = this.stationLevels;
+    const here = levels[this.stIdx || 0]?.id;
+    const ids = [...new Set([here, ...(d.levels || [])])];
+    const list = ids.map((lid) => ({ idx: levels.findIndex((x) => x.id === lid) })).filter((x) => x.idx >= 0)
+      .sort((a, b) => a.idx - b.idx);
+    this.liftChoices = list.map((x) => x.idx);
+    const escA = (t) => String(t ?? '').replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
+    this.panel.innerHTML = `
+      <div class="sp-head">AUFZUG</div>
+      <div class="sp-title">AUFZUG ${escA(d.letter || '')}</div>
+      ${d.sec ? `<div class="sp-row"><span class="dim">SICHERHEIT</span><span class="sec-t sec-${d.sec}">${SECURITY[d.sec].label}</span></div>` : ''}
+      <div class="sp-head">ZUGANG ZU EBENEN</div>
+      ${list.length > 1 ? list.map((x, i) => `<div class="sp-row sp-go${x.idx === (this.stIdx || 0) ? ' here' : ''}" data-goto="${x.idx}"><span><b class="hk">${i + 1}</b> ${escA(levels[x.idx].plan.name)}</span><span class="dim">${x.idx === (this.stIdx || 0) ? 'HIER' : escA(levels[x.idx].plan.mapName)}</span></div>`).join('')
+        : '<div class="sp-row"><span class="dim">KEINE WEITEREN EBENEN</span></div>'}
+      ${d.access ? `<div class="sp-note">${escA(d.access)}</div>` : ''}
+      <div class="sp-key">ZIFFER EINTIPPEN · ↑ ÜBERSICHT</div>`;
+    this.panel.hidden = false;
+    this.sound.beep();
+  }
+
+  // Ziffer im Aufzugsmenü
+  chooseLift(n) {
+    const idx = this.liftChoices?.[n - 1];
+    if (idx == null) return false;
+    if (idx === (this.stIdx || 0)) return true;
+    return this.gotoLevel(idx);
   }
 
   setVB(r) {
@@ -188,11 +269,12 @@ export class MapView {
   draw(i) {
     this.svg.replaceChildren();
     this.layer = el('g', {}, this.svg);
-    this.info = DRAW[LEVELS[i]](this.layer, this.config, this.station);
+    this.info = DRAW[LEVELS[i]](this.layer, this.config, this.station, this.stIdx || 0);
     this.home = this.info.home || FULL;
     this.level = i;
     this.sel = null;
     this._order = null;
+    this.liftChoices = null;
     this.root.classList.toggle('lvl-station', !!this.info.plan);
     this.root.classList.toggle('lvl-stars', LEVELS[i] === 'stars');
     this.root.querySelectorAll('.hud-range span').forEach((s, k) => s.classList.toggle('on', k === i));
@@ -304,6 +386,7 @@ export class MapView {
   ascend() {
     if (this.animating) return;
     if (this.sel != null) { this.clearRoom(); return; }
+    if (this.liftChoices) { this.liftChoices = null; this.panel.hidden = true; return; }
     if (this.level <= 0) return;
     this.show(this.level - 1);
   }
@@ -448,9 +531,9 @@ export class MapView {
     const vb = this.vb;
     this.draw(this.level);
     this.setVB(vb);
-    if (sel == null) return;
+    const room = sel == null ? null : this.rooms()[sel];
+    if (!room) return;
     this.sel = sel;
-    const room = this.rooms()[sel];
     this.info.plan.nodes[room.id].classList.add('sel');
     this.showRoom(room, this.info.plan.level);
   }

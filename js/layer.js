@@ -32,6 +32,7 @@ export const DESC_FIELDS = [
   ['sight', 'WAS SIEHT MAN'],
   ['sound', 'WAS HÖRT MAN'],
   ['investigate', 'WAS ERFÄHRT MAN NACH GENAUERER UNTERSUCHUNG'],
+  ['interact', 'INTERAKTION'],
 ];
 export const MAX_PICTOS = 5;
 

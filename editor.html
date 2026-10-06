@@ -24,12 +24,13 @@
       <button id="export">EXPORTIEREN</button>
       <button id="import">IMPORTIEREN</button>
       <input type="file" id="importfile" accept=".json,application/json" hidden>
-      <button id="clear" class="danger map-only">KARTE LEEREN</button>
+      <button id="clear" class="danger map-only" title="Türen, Trennlinien, Kameras und Raumdaten dieser Ebene löschen (Grundriss bleibt)">EBENE LEEREN</button>
       <a class="btn" href="./" target="apollo-terminal">TERMINAL ↗</a>
     </div>
   </header>
 
   <aside class="ed-tools">
+    <div id="levelpick"></div>
     <div class="ed-head">WERKZEUG</div>
     <div id="tools"></div>
     <div class="ed-head">SICHERHEITSSTUFE</div>

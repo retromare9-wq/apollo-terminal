@@ -1,4 +1,4 @@
-import { CONFIG, TOPICS, MENU, PERSONNEL, STATION, DEMO_REPLIES, COMMLOG, SYSTEMS, SELFDESTRUCT, ACCESS } from './data.js';
+import { CONFIG, TOPICS, MENU, PERSONNEL, DEMO_REPLIES, COMMLOG, SYSTEMS, SELFDESTRUCT, ACCESS } from './data.js';
 import { matchTopic, normalize } from './matcher.js';
 import { sound } from './sound.js';
 import { runBoot } from './boot.js';
@@ -7,6 +7,7 @@ import { wyLogo } from './logo.js';
 import { loadContent, CONTENT_KEY } from './content.js';
 import { loadLayer, STATUS } from './layer.js';
 import { roomName } from './stationplan.js';
+import { terminalLevels, PLANS_KEY } from './plans.js';
 
 loadContent();
 
@@ -249,21 +250,28 @@ function showDamage(topic) {
   leave();
   state.view = 'report';
   const dmg = topic.damage || {};
-  const lv = STATION.levels[0];
-  const layer = loadLayer(lv.id, lv.layer);
-  const level = lv.plan;
-  const roomById = (id) => level.rooms.find((r) => r.id === id);
+  // Alle Ebenen der Karten, die im Terminal erscheinen
+  const levels = terminalLevels().map((lv) => ({ level: lv.plan, layer: loadLayer(lv.id, lv.layer) }));
+  const findRoom = (id) => {
+    for (const lv of levels) {
+      const room = lv.level.rooms.find((r) => r.id === id);
+      if (room) return { room, ...lv };
+    }
+    return null;
+  };
   const rows = [];
   const covered = new Set();
   for (const c of dmg.cases || []) {
-    const room = c.room && roomById(c.room);
-    const status = room ? layer.rooms[room.id]?.status || '' : c.status || '';
-    if (room) covered.add(room.id);
-    rows.push({ name: c.title || (room ? roomName(level, room, layer) : '–'), status, text: c.text || '' });
+    const hit = c.room && findRoom(c.room);
+    const status = hit ? hit.layer.rooms[hit.room.id]?.status || '' : c.status || '';
+    if (hit) covered.add(hit.room.id);
+    rows.push({ name: c.title || (hit ? roomName(hit.level, hit.room, hit.layer) : '–'), status, text: c.text || '' });
   }
-  for (const room of level.rooms) {
-    const st = layer.rooms[room.id]?.status;
-    if (st && !covered.has(room.id)) rows.push({ name: roomName(level, room, layer), status: st, text: layer.rooms[room.id]?.info || '' });
+  for (const { level, layer } of levels) {
+    for (const room of level.rooms) {
+      const st = layer.rooms[room.id]?.status;
+      if (st && !covered.has(room.id)) rows.push({ name: roomName(level, room, layer), status: st, text: layer.rooms[room.id]?.info || '' });
+    }
   }
   const active = rows.filter((r) => r.status);
   const hull = Number(dmg.hull);
@@ -334,11 +342,11 @@ function showMap(topic) {
   view.innerHTML = '<div class="map"></div>';
   state.map = new MapView(view.firstElementChild, {
     config: CONFIG,
-    station: STATION,
+    station: { levels: terminalLevels() },
     sound,
     onLevel: (i, info) => {
       setTitle(info.title, `R${i + 1} ◂`);
-      if (info.plan) setHint('←→ RAUM · RAUM-ID EINTIPPEN · ↑ ZURÜCK · STRG+PFEILE BEWEGEN · +/# ZOOM · ESC');
+      if (info.plan) setHint(`←→ RAUM · RAUM-ID EINTIPPEN${state.map?.stationLevels.length > 1 ? ' · STRG +/− EBENE' : ''} · STRG+PFEILE · +/# ZOOM · ESC`);
       else setHint('↓/↑ WEITER/ZURÜCK · STRG+PFEILE BEWEGEN · +/# ZOOM · ESC MENÜ');
     },
   });
@@ -948,6 +956,9 @@ function submit() {
   }
   const lower = raw.toLowerCase();
   if (state.view === 'map' && state.map?.info?.plan) {
+    if (/^\d+$/.test(raw) && state.map.liftChoices) { if (!state.map.chooseLift(Number(raw))) sound.error(); return; }
+    const lift = state.map.findLift(raw);
+    if (lift) { state.map.showLift(lift); return; }
     const i = state.map.findRoom(raw);
     if (i >= 0) { state.map.focusRoom(i); return; }
   }
@@ -978,6 +989,13 @@ function onKey(e) {
   if (e.key === 'F9') { e.preventDefault(); sound.toggle(); updateFlags(); return; }
   if (e.key === 'F10') { e.preventDefault(); document.body.classList.toggle('crt'); return; }
   const onPlan = state.view === 'map' && state.map && !state.map.animating;
+  // Stationsplan: Ebene wechseln mit Strg + „+“ / Strg + „-“ (oder Bild↑ / Bild↓)
+  if (onPlan && state.map.info?.plan && ((e.ctrlKey && ['+', '-', '=', 'Add', 'Subtract'].includes(e.key)) || e.key === 'PageUp' || e.key === 'PageDown')) {
+    e.preventDefault();
+    const up = e.key === '+' || e.key === '=' || e.key === 'Add' || e.key === 'PageUp';
+    if (!state.map.stepLevel(up ? -1 : 1)) sound.error();
+    return;
+  }
   if (onPlan && e.ctrlKey && e.key.startsWith('Arrow')) {
     e.preventDefault();
     const d = { ArrowLeft: [-0.2, 0], ArrowRight: [0.2, 0], ArrowUp: [0, -0.2], ArrowDown: [0, 0.2] }[e.key];
@@ -1041,7 +1059,8 @@ function onKey(e) {
 
 // Änderungen aus dem Editor (anderes Fenster) live übernehmen
 addEventListener('storage', (e) => {
-  if (e.key && e.key.startsWith('apollo.map.') && state.view === 'map') state.map?.redrawStation();
+  if (e.key === PLANS_KEY && state.map) state.map.station = { levels: terminalLevels() };
+  if (e.key && (e.key.startsWith('apollo.map.') || e.key === PLANS_KEY) && state.view === 'map') state.map?.redrawStation();
   if (e.key === CONTENT_KEY) {
     loadContent();
     initChromeText();
