@@ -76,7 +76,7 @@ export function loadPlans() {
 }
 
 export function savePlans(plans) {
-  try { localStorage.setItem(PLANS_KEY, JSON.stringify(plans)); } catch { /* ignorieren */ }
+  try { localStorage.setItem(PLANS_KEY, JSON.stringify(plans)); return true; } catch { return false; }
 }
 
 // Ausdehnung eines Grundrisses

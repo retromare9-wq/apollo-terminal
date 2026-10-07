@@ -193,3 +193,7 @@ svg.z-mid .mm-minor { stroke: transparent; }
 .ed-big { font-size: 13px; margin: 8px 0 4px; }
 
 .ed-marquee { fill: rgba(108, 196, 149, .1); stroke: var(--mint); stroke-width: 1.5; stroke-dasharray: 5 4; vector-effect: non-scaling-stroke; pointer-events: none; }
+
+.ed-zonemode { display: grid; grid-template-columns: 1fr 1fr; gap: 5px; margin: 0 0 8px 22px; }
+.ed-zonemode button.on { background: var(--yellow); color: var(--ink); border-color: var(--yellow); }
+.editor .ly-shaft { cursor: pointer; }

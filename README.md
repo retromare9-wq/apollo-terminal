@@ -82,11 +82,13 @@ Raster wie Millimeterpapier: 1 Kästchen = 1 mm = 0,5 m, dicke Linie = 1 cm = 5 
 
 | Taste | Grundriss |
 |---|---|
+| 1–4 | Auswahl, Radierer, Beschriftung, Piktogramm |
+| 5–8 | Tür, Aufzug, Kamera, Schachtzugang (2 × 2 mm, Schacht-ID und Notiz) |
+| A | Zonen: Linie (rastet auf jeden mm ein) oder Kasten (wie Räume) |
 | Q | Raum zeichnen (Rechteck aufziehen in 5-mm-Schritten, mit Strg in 1-mm-Schritten; „+ TEILFLÄCHE“ baut an einen Raum an) |
 | W / E | Korridor schmal (1,5 m) / breit (2,5 m): Strecke ziehen, feste Breite; mit Strg frei in 1-mm-Schritten |
 | Strg+C / Strg+V | Gewähltes Objekt kopieren / an der Mausposition einfügen |
 | Strg+Klick / Strg+Rahmen | Mehrere Objekte wählen (Rahmen: alles, was ganz darin liegt); gemeinsam verschieben, kopieren, löschen |
-| A | Aufzug setzen (drehen, Ebenen zuordnen im Aufzugsfenster) |
 | 1 | Raum/Korridor/Aufzug anklicken, dann ziehen = verschieben, gelbe Ecken = Größe |
 
 Räume und Korridore bekommen eigene Farben für Fläche und Rahmen. Wo Korridor- und Raumrahmen
@@ -97,20 +99,20 @@ Aufzug – oder sein Buchstabe + Enter – zeigt die erreichbaren Ebenen, eine Z
 
 ### Stationsplan
 
-`editor.html` – Türen (Sicherheitsstufe Grün / Orange / Rot), graue Trennlinien, Kameras mit
+`editor.html` – Türen (Sicherheitsstufe Grün / Orange / Rot), graue Zonen-Markierungen, Kameras mit
 Sichtkegel (Richtung und Reichweite einstellbar, fester Öffnungswinkel) sowie Raumname, Status
 und Notiz eintragen.
 
 | Taste | Werkzeug |
 |---|---|
-| 1 | Auswahl / Verschieben (freie Fläche ziehen = Karte bewegen) |
-| 2 | Tür (in einen Gang oder an eine Raumwand klicken) |
-| 3 | Trennlinie (Anfang und Ende klicken) |
-| 4 | Kamera (gelben Punkt ziehen = Richtung und Reichweite) |
-| 5 | Raum: ID (Häkchen „AUF KARTE“ zeigt sie im Plan, mit Werkzeug 1 im Raum verschiebbar), Name, Bereich, Status, Notiz · „Raumbeschreibung öffnen“ für Ästhetik, Sinneseindrücke, Untersuchung, Gegenstände und Piktogramme |
-| 6 | Radierer |
-| 7 | Piktogramm (Semiotic Standard, bis zu 5 pro Raum) |
-| 8 | Beschriftung setzen (vorhandene mit Werkzeug 1 anklicken, umbenennen, verschieben) |
+| 1 | Auswahl / Verschieben (freie Fläche ziehen = Karte bewegen) · Raum anklicken: ID („AUF KARTE“), Name, Bereich, Cluttered, Status, Notiz, Raumbeschreibung |
+| 2 | Radierer |
+| 3 | Beschriftung setzen (vorhandene mit Werkzeug 1 anklicken, umbenennen, verschieben) |
+| 4 | Piktogramm (Semiotic Standard, bis zu 5 pro Raum) |
+| 5 | Tür (in einen Gang oder an eine Raumwand klicken) |
+| 6 | Aufzug |
+| 7 | Kamera (gelben Punkt ziehen = Richtung und Reichweite) |
+| 8 | Schachtzugang |
 | G / O / R | Sicherheitsstufe (auch für die gewählte Tür) |
 | Entf · Strg+Z · Strg+Y | Löschen · Rückgängig · Wiederholen |
 

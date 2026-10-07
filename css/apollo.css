@@ -333,6 +333,9 @@ body.crt .crt-overlay::after {
 .ly-door.sec-red { fill: var(--sec-red); }
 .ly-line { stroke: var(--sep); stroke-width: 1.4; stroke-linecap: round; }
 .ly-hit { stroke: transparent; stroke-width: 12; }
+.ly-line.box, .ly-hit.box { fill: none; }
+.ly-hit.box { pointer-events: stroke; }
+.ly-shaft { fill: #1d3fd6; stroke: #7a95ff; stroke-width: 1.5; }
 .ly-cone { pointer-events: none; stroke: rgba(108, 196, 149, .55); stroke-width: 1; stroke-dasharray: 3 3; }
 .ly-camdot { fill: var(--mint); stroke: #0a0604; stroke-width: 1.5; }
 .ly-camdir { stroke: var(--mint); stroke-width: 2.5; stroke-linecap: round; }

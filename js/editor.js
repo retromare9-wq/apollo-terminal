@@ -1,10 +1,10 @@
-// Karten-Editor: Türen, Trennlinien, Kameras und Raumdaten auf einem Stationsplan eintragen.
+// Karten-Editor: Türen, Zonen, Kameras, Schachtzugänge und Raumdaten auf einem Stationsplan eintragen.
 import { CONFIG } from './data.js';
 import { el } from './svg.js';
 import { drawStationPlan, roomName, roomCode, roomZone, liftData, applyZoom, planLabels, roomIdPos, bbox } from './stationplan.js';
 import {
   CAM, SECURITY, STATUS, UNITS_PER_M, DESC_FIELDS, MAX_PICTOS, loadLayer, saveLayer, emptyLayer, importLayer,
-  snapDoor, roomAt, containerRects, camHandle, roomDoors, roomCams, inRect, corridorAt, storageKey,
+  snapDoor, roomAt, containerRects, camHandle, roomDoors, roomCams, inRect, corridorAt, storageKey, SHAFT, roomShafts,
 } from './layer.js';
 import { SEMIOTIC, semioticSvg, semioticById } from './semiotic.js';
 import { equipmentList, equipmentCategories, saveItem, deleteItem, exportEquipment, importEquipment } from './equipment.js';
@@ -43,20 +43,23 @@ const snap = (v, s = 25) => Math.round(v / s) * s;
 const m = (u) => (u / UNITS_PER_M).toFixed(1);
 
 const TOOLS = [
-  { id: 'select', key: '1', label: 'AUSWAHL', hint: 'Objekt anklicken zum Auswählen und Verschieben · freie Fläche ziehen = Karte bewegen · Raum anklicken = Raumdaten · Strg+Klick oder Strg+Rahmen ziehen = mehrere Objekte wählen' },
-  { id: 'door', key: '2', label: 'TÜR', hint: 'In einen Gang klicken (Tür quer zum Gang) oder an eine Raumwand (Tür in der Wand). Stufe links wählen.' },
-  { id: 'line', key: '3', label: 'TRENNLINIE', hint: 'Anfangspunkt klicken, dann Endpunkt klicken · Esc bricht ab · rastet am Raster ein' },
-  { id: 'cam', key: '4', label: 'KAMERA', hint: 'In einen Raum oder Gang klicken · gelben Punkt ziehen = Richtung und Reichweite' },
-  { id: 'room', key: '5', label: 'RAUM', hint: 'Raum anklicken: rechts ID, Name, Bereich, Status und Notiz bearbeiten · Raumbeschreibung öffnen' },
-  { id: 'erase', key: '6', label: 'RADIERER', hint: 'Tür, Linie oder Kamera anklicken zum Löschen' },
-  { id: 'picto', key: '7', label: 'PIKTOGRAMM', hint: 'Piktogramm links auswählen, dann in einen Raum klicken (höchstens 5 pro Raum)' },
-  { id: 'label', key: '8', label: 'BESCHRIFTUNG', hint: 'Klicken, um eine neue Beschriftung zu setzen · vorhandene Beschriftungen mit dem Auswahl-Werkzeug anklicken, ändern und verschieben' },
+  // Werkzeug
+  { id: 'select', key: '1', group: 'tool', label: 'AUSWAHL', hint: 'Objekt anklicken zum Auswählen und Verschieben · freie Fläche ziehen = Karte bewegen · Raum anklicken = Raumdaten · Strg+Klick oder Strg+Rahmen ziehen = mehrere Objekte wählen' },
+  { id: 'erase', key: '2', group: 'tool', label: 'RADIERER', hint: 'Tür, Zone, Kamera, Schachtzugang oder Beschriftung anklicken zum Löschen' },
+  { id: 'label', key: '3', group: 'tool', label: 'BESCHRIFTUNG', hint: 'Klicken, um eine neue Beschriftung zu setzen · vorhandene Beschriftungen mit dem Auswahl-Werkzeug anklicken, ändern und verschieben' },
+  { id: 'picto', key: '4', group: 'tool', label: 'PIKTOGRAMM', hint: 'Piktogramm links auswählen, dann in einen Raum klicken (höchstens 5 pro Raum)' },
+  // Items
+  { id: 'door', key: '5', group: 'items', label: 'TÜR', hint: 'In einen Gang klicken (Tür quer zum Gang) oder an eine Raumwand (Tür in der Wand). Stufe links wählen.' },
+  { id: 'plift', key: '6', group: 'items', label: 'AUFZUG', hint: 'Klicken setzt einen Aufzug (Kabine + Leitergang) · anklicken, um ihn zu drehen, zu verschieben oder Ebenen zuzuordnen' },
+  { id: 'cam', key: '7', group: 'items', label: 'KAMERA', hint: 'In einen Raum oder Gang klicken · gelben Punkt ziehen = Richtung und Reichweite' },
+  { id: 'shaft', key: '8', group: 'items', label: 'SCHACHTZUGANG', hint: 'Klicken setzt einen Schachtzugang (2 × 2 mm) · anklicken: Schacht-ID und Notiz' },
   // Grundriss
-  { id: 'proom', key: 'q', plan: true, label: 'RAUM ZEICHNEN', hint: 'Rechteck aufziehen · Größe in 5-mm-Schritten (2,5 m), mit gedrückter Strg-Taste in 1-mm-Schritten (1 Kästchen = 1 mm = 0,5 m) · im Raum-Fenster „+ TEILFLÄCHE“ baut an einen Raum an' },
-  { id: 'cnarrow', key: 'w', plan: true, label: 'KORRIDOR SCHMAL', hint: 'Strecke ziehen – Breite fest (schmal), Länge in 5-mm-Schritten · mit Strg frei in 1-mm-Schritten · Breiten im Kartenfenster einstellbar (Esc = nichts gewählt)' },
-  { id: 'cwide', key: 'e', plan: true, label: 'KORRIDOR BREIT', hint: 'Strecke ziehen – Breite fest (breit), Länge in 5-mm-Schritten · mit Strg frei in 1-mm-Schritten' },
-  { id: 'plift', key: 'a', plan: true, label: 'AUFZUG', hint: 'Klicken setzt einen Aufzug (Kabine + Leitergang) · anklicken, um ihn zu drehen, zu verschieben oder Ebenen zuzuordnen' },
+  { id: 'proom', key: 'q', group: 'plan', label: 'RAUM ZEICHNEN', hint: 'Rechteck aufziehen · Größe in 5-mm-Schritten (2,5 m), mit gedrückter Strg-Taste in 1-mm-Schritten (1 Kästchen = 1 mm = 0,5 m) · im Raum-Fenster „+ TEILFLÄCHE“ baut an einen Raum an' },
+  { id: 'cnarrow', key: 'w', group: 'plan', label: 'KORRIDOR SCHMAL', hint: 'Strecke ziehen – Breite fest (schmal), Länge in 5-mm-Schritten · mit Strg frei in 1-mm-Schritten · Breiten im Kartenfenster einstellbar (Esc = nichts gewählt)' },
+  { id: 'cwide', key: 'e', group: 'plan', label: 'KORRIDOR BREIT', hint: 'Strecke ziehen – Breite fest (breit), Länge in 5-mm-Schritten · mit Strg frei in 1-mm-Schritten' },
+  { id: 'line', key: 'a', group: 'plan', label: 'ZONEN', hint: 'Zonen markieren: LINIE = Anfangs- und Endpunkt klicken (rastet auf jeden Millimeter ein, Esc bricht ab) · KASTEN = aufziehen wie ein Raum (5-mm-Schritte, mit Strg 1 mm)' },
 ];
+const TOOL_GROUPS = [['tool', 'WERKZEUG'], ['items', 'ITEMS'], ['plan', 'GRUNDRISS']];
 const snapP = (pt) => ({ x: snap(pt.x, SNAP), y: snap(pt.y, SNAP) });
 
 const st = {
@@ -89,9 +92,10 @@ function snapshot() {
   updateButtons();
 }
 function commit() {
-  saveLayer(LV.id, layer);
+  const ok1 = saveLayer(LV.id, layer);
   level = asLevel(MAP, LV);
-  savePlans(plans);
+  const ok2 = savePlans(plans);
+  if (!ok1 || !ok2) toast('ACHTUNG: SPEICHERN IM BROWSER FEHLGESCHLAGEN – BITTE SOFORT EXPORTIEREN');
   render();
 }
 function undo() {
@@ -142,7 +146,7 @@ function patchLift(id, patch) {
   if (Object.keys(d).length) layer.lifts[id] = d; else delete layer.lifts[id];
 }
 
-const listOf = (kind) => ({ door: layer.doors, line: layer.lines, cam: layer.cams }[kind]);
+const listOf = (kind) => ({ door: layer.doors, line: layer.lines, cam: layer.cams, shaft: layer.shafts }[kind]);
 const find = (kind, id) => (kind === 'label' ? planLabels(level, layer).find((l) => l.id === id) : listOf(kind)?.find((o) => o.id === id));
 function patchLabel(id, patch) {
   layer.labels[id] = { ...(layer.labels[id] || {}), ...patch };
@@ -292,8 +296,14 @@ function drawUi(pt) {
     const p = snapP(pt);
     if (st.tool === 'plift') el('rect', { x: p.x, y: p.y, width: 100, height: 50, class: 'ed-draw' }, uiTemp);
     else el('circle', { cx: p.x, cy: p.y, r: 4, class: 'ed-snapdot' }, uiTemp);
+  } else if (st.tool === 'shaft') {
+    const p = snapP({ x: pt.x - SHAFT / 2, y: pt.y - SHAFT / 2 });
+    el('rect', { x: p.x, y: p.y, width: SHAFT, height: SHAFT, class: 'ed-draw' }, uiTemp);
+  } else if (st.tool === 'line' && st.zoneMode === 'box') {
+    const p = snapP(pt);
+    el('circle', { cx: p.x, cy: p.y, r: 4, class: 'ed-snapdot' }, uiTemp);
   } else if (st.tool === 'line') {
-    const p = { x: snap(pt.x), y: snap(pt.y) };
+    const p = { x: snap(pt.x, MM), y: snap(pt.y, MM) };
     if (st.lineStart) {
       const q = ortho(st.lineStart, p);
       el('line', { x1: st.lineStart.x, y1: st.lineStart.y, x2: q.x, y2: q.y, class: 'ed-preview' }, uiTemp);
@@ -315,7 +325,7 @@ function ortho(a, b) {
 
 function renderProps() {
   if (st.multi.length > 1) {
-    const names = { room: 'RÄUME', corr: 'KORRIDORE', lift: 'AUFZÜGE', door: 'TÜREN', cam: 'KAMERAS', line: 'TRENNLINIEN', label: 'BESCHRIFTUNGEN' };
+    const names = { room: 'RÄUME', corr: 'KORRIDORE', lift: 'AUFZÜGE', door: 'TÜREN', cam: 'KAMERAS', line: 'ZONEN', label: 'BESCHRIFTUNGEN', shaft: 'SCHACHTZUGÄNGE' };
     const count = {};
     st.multi.forEach((it) => { count[it.kind] = (count[it.kind] || 0) + 1; });
     props.innerHTML = `
@@ -402,10 +412,26 @@ function renderProps() {
   } else if (sel.kind === 'line') {
     const l = find('line', sel.id);
     props.innerHTML = `
-      <h3>TRENNLINIE</h3>
-      <div class="ed-row"><span class="dim">LÄNGE</span><span>${m(Math.hypot(l.x2 - l.x1, l.y2 - l.y1))} M</span></div>
-      <div class="ed-btns"><button class="danger" data-del>LINIE LÖSCHEN</button></div>
-      <p class="ed-note">Mit dem Auswahl-Werkzeug ziehen, um die Linie zu verschieben.</p>`;
+      <h3>ZONE – ${l.box ? 'KASTEN' : 'LINIE'}</h3>
+      ${l.box ? `<div class="ed-row"><span class="dim">GRÖSSE</span><span>${m(Math.abs(l.x2 - l.x1))} × ${m(Math.abs(l.y2 - l.y1))} M</span></div>`
+        : `<div class="ed-row"><span class="dim">LÄNGE</span><span>${m(Math.hypot(l.x2 - l.x1, l.y2 - l.y1))} M</span></div>`}
+      <div class="ed-btns"><button class="danger" data-del>ZONE LÖSCHEN</button></div>
+      <p class="ed-note">Mit dem Auswahl-Werkzeug ziehen, um die Zone zu verschieben (rastet auf jeden Millimeter ein).</p>`;
+  } else if (sel.kind === 'shaft') {
+    const sh = find('shaft', sel.id);
+    const room = roomAt(level, sh.x + SHAFT / 2, sh.y + SHAFT / 2);
+    const def = room ? roomCode(room, layer) : '';
+    props.innerHTML = `
+      <h3>SCHACHTZUGANG</h3>
+      <div class="ed-row"><span class="dim">RAUM</span><span>${room ? esc(roomName(level, room, layer)) : '– (AUSSERHALB) –'}</span></div>
+      <label class="ed-field">SCHACHT-ID <input type="text" data-sk="sid" maxlength="30" value="${esc(sh.sid)}" placeholder="${esc(def || 'SCHACHT')}"></label>
+      <label class="ed-field">NOTIZ <textarea data-sk="note" maxlength="1000">${esc(sh.note)}</textarea></label>
+      <div class="ed-btns"><button class="danger" data-del>SCHACHTZUGANG LÖSCHEN</button></div>
+      <p class="ed-note">Ohne eigene Schacht-ID gilt die ID des Raums. Mit dem Auswahl-Werkzeug ziehen = verschieben.</p>`;
+    props.querySelectorAll('[data-sk]').forEach((inp) => {
+      inp.addEventListener('focus', snapshot);
+      inp.addEventListener('input', () => { if (inp.value.trim()) sh[inp.dataset.sk] = inp.value; else delete sh[inp.dataset.sk]; commit(); });
+    });
   } else if (sel.kind === 'room') {
     const room = roomById(sel.id);
     const data = layer.rooms[room.id] || {};
@@ -418,6 +444,7 @@ function renderProps() {
       <div class="ed-crow ed-idrow"><label class="ed-field">RAUM-ID <input type="text" data-k="code" maxlength="20" value="${esc(data.code)}" placeholder="${esc(room.id)}"></label><label class="ed-field ed-checkf" title="Raum-ID auf der Karte anzeigen (im Raum verschiebbar)"><input type="checkbox" data-showid ${data.showId ? 'checked' : ''}> AUF KARTE</label></div>
       <label class="ed-field">NAME <input type="text" data-k="name" maxlength="40" value="${esc(data.name)}" placeholder="${esc(roomName(level, room, { rooms: {} }))}"></label>
       <label class="ed-field">BEREICH <input type="text" data-k="zoneName" maxlength="40" value="${esc(data.zoneName)}" placeholder="${esc(level.zones[room.zone] || room.zone)}"></label>
+      <label class="ed-check ed-big"><input type="checkbox" data-kb="cluttered" ${data.cluttered ? 'checked' : ''}> CLUTTERED</label>
       <label class="ed-field">STATUS <select data-k="status">${Object.entries(STATUS).map(([k, v]) => `<option value="${k}" ${(data.status || '') === k ? 'selected' : ''}>${v}</option>`).join('')}</select></label>
       <label class="ed-field">NOTIZ (ERSCHEINT IM TERMINAL) <textarea data-k="info" maxlength="300">${esc(data.info)}</textarea></label>
       <div class="ed-field">PIKTOGRAMME (${pics.length}/${MAX_PICTOS})</div>
@@ -557,7 +584,7 @@ function renderLevelPick() {
   $('#ed-sub').textContent = `// ${MAP.name} · ${level.name}`;
 }
 
-const plansChanged = () => { savePlans(plans); renderLevelPick(); };
+const plansChanged = () => { if (!savePlans(plans)) toast('ACHTUNG: SPEICHERN IM BROWSER FEHLGESCHLAGEN – BITTE SOFORT EXPORTIEREN'); renderLevelPick(); };
 
 function copyLayer(fromId, toId) {
   saveLayer(toId, JSON.parse(JSON.stringify(loadLayer(fromId, LAYER_FALLBACK[fromId]))));
@@ -624,6 +651,11 @@ function bindMapProps() {
 }
 
 function bindRoomFields(root, room) {
+  root.querySelectorAll('[data-kb]').forEach((cb) => cb.addEventListener('change', () => {
+    snapshot();
+    patchRoom(room.id, { [cb.dataset.kb]: cb.checked || '' });
+    commit();
+  }));
   root.querySelectorAll('[data-showid]').forEach((cb) => cb.addEventListener('change', () => {
     snapshot();
     patchRoom(room.id, { showId: cb.checked || '' });
@@ -664,10 +696,18 @@ function setTool(id) {
   svg.classList.toggle('tool-select', id === 'select');
   document.querySelectorAll('.ed-tool').forEach((b) => b.classList.toggle('on', b.dataset.tool === id));
   $('#pictos').hidden = id !== 'picto';
+  $('#zonemode').hidden = id !== 'line';
+  setZoneMode(st.zoneMode || 'line');
   if (id !== 'proom') st.append = null;
   if (ui) render();
   drawUi();
   if (!st.sel) renderProps();
+}
+
+function setZoneMode(m) {
+  st.zoneMode = m;
+  st.lineStart = null;
+  document.querySelectorAll('[data-zm]').forEach((b) => b.classList.toggle('on', b.dataset.zm === m));
 }
 
 function setSec(sec) {
@@ -762,8 +802,23 @@ function onDown(e) {
     renderProps();
     return;
   }
+  if (st.tool === 'line' && st.zoneMode === 'box') {
+    st.drag = { type: 'draw', kind: 'zone', start: snapP(pt) };
+    svg.setPointerCapture(e.pointerId);
+    return;
+  }
+  if (st.tool === 'shaft') {
+    const p = snapP({ x: pt.x - SHAFT / 2, y: pt.y - SHAFT / 2 });
+    snapshot();
+    const sh = { id: uid('s'), x: p.x, y: p.y };
+    layer.shafts.push(sh);
+    st.sel = { kind: 'shaft', id: sh.id };
+    commit();
+    renderProps();
+    return;
+  }
   if (st.tool === 'line') {
-    const p = { x: snap(pt.x), y: snap(pt.y) };
+    const p = { x: snap(pt.x, MM), y: snap(pt.y, MM) };
     if (!st.lineStart) { st.lineStart = p; drawUi(pt); return; }
     const q = ortho(st.lineStart, p);
     if (Math.hypot(q.x - st.lineStart.x, q.y - st.lineStart.y) >= 10) {
@@ -863,6 +918,7 @@ function renderDetail() {
           <div class="ed-crow ed-idrow"><label class="ed-field">RAUM-ID <input type="text" data-k="code" maxlength="20" value="${esc(data.code)}" placeholder="${esc(room.id)}"></label><label class="ed-field ed-checkf" title="Raum-ID auf der Karte anzeigen (im Raum verschiebbar)"><input type="checkbox" data-showid ${data.showId ? 'checked' : ''}> AUF KARTE</label></div>
           <label class="ed-field">NAME <input type="text" data-k="name" maxlength="40" value="${esc(data.name)}" placeholder="${esc(roomName(level, room, { rooms: {} }))}"></label>
           <label class="ed-field">BEREICH <input type="text" data-k="zoneName" maxlength="40" value="${esc(data.zoneName)}" placeholder="${esc(level.zones[room.zone] || room.zone)}"></label>
+          <label class="ed-check ed-big"><input type="checkbox" data-kb="cluttered" ${data.cluttered ? 'checked' : ''}> CLUTTERED</label>
           <label class="ed-field">STATUS <select data-k="status">${Object.entries(STATUS).map(([k, v]) => `<option value="${k}" ${(data.status || '') === k ? 'selected' : ''}>${v}</option>`).join('')}</select></label>
           <div class="ed-row"><span class="dim">EBENE</span><span>${esc(level.name)}</span></div>
           <div class="ed-row"><span class="dim">TÜREN</span><span>${doors.length}${doors.length ? ` · ${['green', 'orange', 'red'].map((k) => { const n = doors.filter((d) => (d.sec || 'green') === k).length; return n ? `<span class="sec-t sec-${k}">${n}× ${SECURITY[k].label}</span>` : ''; }).filter(Boolean).join(' ')}` : ''}</span></div>
@@ -1035,7 +1091,7 @@ function drawRect(d, pt) {
   const dy = pt.y - a.y;
   if (Math.max(Math.abs(dx), Math.abs(dy)) < MM / 2) return null;
   const step = stepOf();
-  if (d.kind === 'room' || st.ctrl) {
+  if (d.kind === 'room' || d.kind === 'zone' || st.ctrl) {
     return norm4(a, { x: a.x + stepLen(dx, step), y: a.y + stepLen(dy, step) });
   }
   const w = d.kind === 'cwide' ? MAP.wide : MAP.narrow;
@@ -1064,6 +1120,10 @@ function finishDraw(d, pt) {
       st.sel = { kind: 'room', id: room.id };
     }
     st.append = null;
+  } else if (d.kind === 'zone') {
+    const z = { id: uid('l'), box: true, x1: rc[0], y1: rc[1], x2: rc[2], y2: rc[3] };
+    layer.lines.push(z);
+    st.sel = { kind: 'line', id: z.id };
   } else {
     level.corridors.push(rc);
     st.sel = { kind: 'corr', id: level.corridors.length - 1 };
@@ -1132,7 +1192,7 @@ function startPlanMove(e, pt, sel) {
     const room = roomById(sel.id);
     d.orig = JSON.stringify(room.rects);
     d.doors = roomDoors(layer, room).map((x) => ({ o: x, x: x.x, y: x.y }));
-    d.cams = roomCams(layer, room).map((x) => ({ o: x, x: x.x, y: x.y }));
+    d.cams = [...roomCams(layer, room), ...roomShafts(layer, room)].map((x) => ({ o: x, x: x.x, y: x.y }));
     d.idPos = layer.rooms[room.id]?.idPos ? { ...layer.rooms[room.id].idPos } : null;
   } else if (sel.kind === 'corr') {
     d.orig = JSON.stringify(level.corridors[sel.id]);
@@ -1232,6 +1292,7 @@ function itemsIn(r) {
   level.lifts.forEach((l) => { if (inside(...l.rect.slice(0, 4))) out.push({ kind: 'lift', id: l.id }); });
   layer.doors.forEach((d) => { if (inside(d.x, d.y, d.x, d.y)) out.push({ kind: 'door', id: d.id }); });
   layer.cams.forEach((c) => { if (inside(c.x, c.y, c.x, c.y)) out.push({ kind: 'cam', id: c.id }); });
+  layer.shafts.forEach((x) => { if (inside(x.x, x.y, x.x + SHAFT, x.y + SHAFT)) out.push({ kind: 'shaft', id: x.id }); });
   layer.lines.forEach((l) => { if (inside(Math.min(l.x1, l.x2), Math.min(l.y1, l.y2), Math.max(l.x1, l.x2), Math.max(l.y1, l.y2))) out.push({ kind: 'line', id: l.id }); });
   planLabels(level, layer).forEach((l) => { if (inside(l.x, l.y, l.x, l.y)) out.push({ kind: 'label', id: l.id }); });
   return out;
@@ -1248,13 +1309,14 @@ function startGroupMove(e, pt) {
       const room = roomById(it.id);
       roomDoors(layer, room).forEach((d) => doors.set(d.id, { o: d, x: d.x, y: d.y }));
       roomCams(layer, room).forEach((c) => cams.set(c.id, { o: c, x: c.x, y: c.y }));
+      roomShafts(layer, room).forEach((c) => cams.set(c.id, { o: c, x: c.x, y: c.y }));
       const idPos = layer.rooms[room.id]?.idPos;
       return { it, rects: deep(room.rects), idPos: idPos ? { ...idPos } : null };
     }
     if (it.kind === 'corr') return { it, rect: level.corridors[it.id].slice() };
     if (it.kind === 'lift') return { it, rect: level.lifts.find((l) => l.id === it.id).rect.slice() };
     if (it.kind === 'door') { const d = find('door', it.id); doors.set(d.id, { o: d, x: d.x, y: d.y }); return null; }
-    if (it.kind === 'cam') { const c = find('cam', it.id); cams.set(c.id, { o: c, x: c.x, y: c.y }); return null; }
+    if (it.kind === 'cam' || it.kind === 'shaft') { const c = find(it.kind, it.id); cams.set(c.id, { o: c, x: c.x, y: c.y }); return null; }
     if (it.kind === 'line') return { it, line: { ...find('line', it.id) } };
     if (it.kind === 'label') { const l = find('label', it.id); return { it, x: l.x, y: l.y }; }
     return null;
@@ -1301,7 +1363,7 @@ function deleteMulti() {
   level.lifts = level.lifts.filter((l) => !lifts.has(l.id));
   LV.plan.lifts = level.lifts;
   lifts.forEach((id) => delete layer.lifts[id]);
-  for (const [k, arr] of [['door', 'doors'], ['cam', 'cams'], ['line', 'lines']]) {
+  for (const [k, arr] of [['door', 'doors'], ['cam', 'cams'], ['line', 'lines'], ['shaft', 'shafts']]) {
     const s0 = ids(k);
     layer[arr] = layer[arr].filter((o) => !s0.has(o.id));
   }
@@ -1334,7 +1396,7 @@ function clipOf(sel) {
     delete info.letter;
     return { kind: 'lift', lift: deep(l), info, box: l.rect.slice(0, 4) };
   }
-  if (['door', 'cam', 'line'].includes(sel.kind)) {
+  if (['door', 'cam', 'line', 'shaft'].includes(sel.kind)) {
     const o = find(sel.kind, sel.id);
     const box = sel.kind === 'line' ? [Math.min(o.x1, o.x2), Math.min(o.y1, o.y2)] : [o.x, o.y];
     return { kind: sel.kind, obj: deep(o), box };
@@ -1380,9 +1442,9 @@ function pasteItem(c, dx, dy) {
     layer.lines.push(o);
     return { kind: 'line', id: o.id };
   }
-  if (c.kind === 'door' || c.kind === 'cam') {
-    const o = { ...deep(c.obj), id: uid(c.kind === 'door' ? 'd' : 'c'), x: c.obj.x + dx, y: c.obj.y + dy };
-    (c.kind === 'door' ? layer.doors : layer.cams).push(o);
+  if (c.kind === 'door' || c.kind === 'cam' || c.kind === 'shaft') {
+    const o = { ...deep(c.obj), id: uid(c.kind[0]), x: c.obj.x + dx, y: c.obj.y + dy };
+    listOf(c.kind).push(o);
     return { kind: c.kind, id: o.id };
   }
   if (c.kind === 'label') {
@@ -1471,9 +1533,12 @@ function onMove(e) {
       obj.x = Math.round(pt.x / 5) * 5;
       obj.y = Math.round(pt.y / 5) * 5;
     } else if (st.sel.kind === 'line') {
-      const dx = snap(pt.x - d.start.x);
-      const dy = snap(pt.y - d.start.y);
+      const dx = snap(pt.x - d.start.x, MM);
+      const dy = snap(pt.y - d.start.y, MM);
       Object.assign(obj, { x1: orig.x1 + dx, y1: orig.y1 + dy, x2: orig.x2 + dx, y2: orig.y2 + dy });
+    } else if (st.sel.kind === 'shaft') {
+      obj.x = orig.x + snap(pt.x - d.start.x, SNAP);
+      obj.y = orig.y + snap(pt.y - d.start.y, SNAP);
     }
     render();
   }
@@ -1565,7 +1630,10 @@ function roomListBlocks() {
     blocks.push({ kv: ['Name', e.name] });
     blocks.push({ kv: ['Bereich', e.zone] });
     blocks.push({ kv: ['Ebene', level.name] });
+    blocks.push({ kv: ['Cluttered', e.d.cluttered ? 'Ja' : 'Nein'] });
     blocks.push({ kv: ['Status', STATUS[e.d.status || '']] });
+    const shafts = roomShafts(layer, e.room);
+    if (shafts.length) blocks.push({ kv: ['Schachtzugänge', shafts.map((x) => `${x.sid || e.code}${x.note ? ` (${x.note})` : ''}`).join('; ')] });
     blocks.push({ kv: ['Türen', e.doors] });
     blocks.push({ kv: ['Kameras', String(e.cams)] });
     blocks.push({ kv: ['Piktogramme', e.d.picto?.length ? e.d.picto.map((p) => `${semioticById(p.id)?.name}${p.map ? ' (auf der Karte)' : ''}`).join(', ') : '–'] });
@@ -1672,8 +1740,8 @@ function initTabs() {
 function init() {
   renderLevelPick();
   const toolBtn = (t) => `<button class="ed-tool" data-tool="${t.id}"><span class="k">${t.key.toUpperCase()}</span>${t.label}</button>`;
-  $('#tools').innerHTML = TOOLS.filter((t) => !t.plan).map(toolBtn).join('')
-    + `<div class="ed-head">GRUNDRISS</div>${TOOLS.filter((t) => t.plan).map(toolBtn).join('')}`;
+  $('#tools').innerHTML = TOOL_GROUPS.map(([g, title], i) => `${i ? `<div class="ed-head">${title}</div>` : ''}${TOOLS.filter((t) => t.group === g).map(toolBtn).join('')}${g === 'plan' ? '<div id="zonemode" class="ed-zonemode" hidden><button data-zm="line">LINIE</button><button data-zm="box">KASTEN</button></div>' : ''}`).join('');
+  document.querySelectorAll('[data-zm]').forEach((b) => b.addEventListener('click', () => setZoneMode(b.dataset.zm)));
   $('#secs').innerHTML = Object.entries(SECURITY).map(([k, v]) => `<button class="ed-sec" data-sec="${k}"><i style="background:var(--sec-${k})"></i>${v.label}</button>`).join('');
   document.querySelectorAll('.ed-tool').forEach((b) => b.addEventListener('click', () => setTool(b.dataset.tool)));
   document.querySelectorAll('#secs .ed-sec').forEach((b) => b.addEventListener('click', () => setSec(b.dataset.sec)));
@@ -1695,7 +1763,7 @@ function init() {
   $('#import').addEventListener('click', () => $('#importfile').click());
   $('#importfile').addEventListener('change', (e) => { if (e.target.files[0]) importFile(e.target.files[0]); e.target.value = ''; });
   $('#clear').addEventListener('click', () => {
-    if (!confirm('Alle Türen, Trennlinien, Kameras und Raumdaten dieser Ebene löschen?')) return;
+    if (!confirm('Alle Türen, Zonen, Kameras, Schachtzugänge und Raumdaten dieser Ebene löschen?')) return;
     snapshot();
     layer = { ...emptyLayer(), settings: layer.settings };
     st.sel = null;

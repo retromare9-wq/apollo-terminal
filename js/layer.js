@@ -37,7 +37,7 @@ export const DESC_FIELDS = [
 export const MAX_PICTOS = 5;
 
 export function emptyLayer() {
-  return { doors: [], lines: [], cams: [], rooms: {}, lifts: {}, labels: {}, settings: { showCams: true } };
+  return { doors: [], lines: [], cams: [], shafts: [], rooms: {}, lifts: {}, labels: {}, settings: { showCams: true } };
 }
 
 function normalize(l) {
@@ -46,6 +46,7 @@ function normalize(l) {
     doors: Array.isArray(l?.doors) ? l.doors : e.doors,
     lines: Array.isArray(l?.lines) ? l.lines : e.lines,
     cams: Array.isArray(l?.cams) ? l.cams : e.cams,
+    shafts: Array.isArray(l?.shafts) ? l.shafts : e.shafts,
     rooms: l?.rooms && typeof l.rooms === 'object' ? l.rooms : e.rooms,
     lifts: l?.lifts && typeof l.lifts === 'object' ? l.lifts : e.lifts,
     labels: l?.labels && typeof l.labels === 'object' ? l.labels : e.labels,
@@ -65,7 +66,7 @@ export function loadLayer(levelId, fallback) {
 }
 
 export function saveLayer(levelId, layer) {
-  try { localStorage.setItem(key(levelId), JSON.stringify(layer)); } catch { /* ignorieren */ }
+  try { localStorage.setItem(key(levelId), JSON.stringify(layer)); return true; } catch { return false; }
 }
 
 export function storageKey(levelId) { return key(levelId); }
@@ -150,6 +151,11 @@ export function camHandle(c) {
 export function roomDoors(layer, room) {
   return layer.doors.filter((d) => room.rects.some((rc) => inRect(rc, d.x, d.y, 3)));
 }
+// Schachtzugänge: 2 × 2 mm auf dem Millimeterpapier = 20 × 20 Einheiten (1 × 1 m)
+export const SHAFT = 20;
+export function roomShafts(layer, room) {
+  return (layer.shafts || []).filter((s) => room.rects.some((rc) => inRect(rc, s.x + SHAFT / 2, s.y + SHAFT / 2)));
+}
 export function roomCams(layer, room) {
   return layer.cams.filter((c) => room.rects.some((rc) => inRect(rc, c.x, c.y)));
 }
@@ -163,9 +169,14 @@ export function drawLayer(g, level, layer, { cams = true, editor = false } = {})
   const defs = el('defs', {}, g);
 
   const lineLayer = el('g', { class: 'ly-lines' }, g);
+  // Zonen: gerade Linie oder Kasten (box: x1/y1 und x2/y2 sind gegenüberliegende Ecken)
   layer.lines.forEach((l) => {
-    const n = el('line', { x1: l.x1, y1: l.y1, x2: l.x2, y2: l.y2, class: 'ly-line', 'data-oid': l.id, 'data-kind': 'line' }, lineLayer);
-    if (editor) el('line', { x1: l.x1, y1: l.y1, x2: l.x2, y2: l.y2, class: 'ly-hit', 'data-oid': l.id, 'data-kind': 'line' }, lineLayer);
+    const attrs = (cls) => (l.box
+      ? { x: Math.min(l.x1, l.x2), y: Math.min(l.y1, l.y2), width: Math.abs(l.x2 - l.x1), height: Math.abs(l.y2 - l.y1), class: `${cls} box`, 'data-oid': l.id, 'data-kind': 'line' }
+      : { x1: l.x1, y1: l.y1, x2: l.x2, y2: l.y2, class: cls, 'data-oid': l.id, 'data-kind': 'line' });
+    const tag = l.box ? 'rect' : 'line';
+    const n = el(tag, attrs('ly-line'), lineLayer);
+    if (editor) el(tag, attrs('ly-hit'), lineLayer);
     nodes[l.id] = n;
   });
 
@@ -192,6 +203,12 @@ export function drawLayer(g, level, layer, { cams = true, editor = false } = {})
       nodes[c.id] = cg;
     });
   }
+
+  // Schachtzugänge: kleiner blauer Kasten
+  const shaftLayer = el('g', { class: 'ly-shafts' }, g);
+  (layer.shafts || []).forEach((s) => {
+    nodes[s.id] = el('rect', { x: s.x, y: s.y, width: SHAFT, height: SHAFT, class: 'ly-shaft', 'data-oid': s.id, 'data-kind': 'shaft' }, shaftLayer);
+  });
 
   const doorLayer = el('g', { class: 'ly-doors' }, g);
   layer.doors.forEach((d) => {
