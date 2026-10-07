@@ -85,6 +85,7 @@ Raster wie Millimeterpapier: 1 Kästchen = 1 mm = 0,5 m, dicke Linie = 1 cm = 5 
 | Q | Raum zeichnen (Rechteck aufziehen in 5-mm-Schritten, mit Strg in 1-mm-Schritten; „+ TEILFLÄCHE“ baut an einen Raum an) |
 | W / E | Korridor schmal (1,5 m) / breit (2,5 m): Strecke ziehen, feste Breite; mit Strg frei in 1-mm-Schritten |
 | Strg+C / Strg+V | Gewähltes Objekt kopieren / an der Mausposition einfügen |
+| Strg+Klick / Strg+Rahmen | Mehrere Objekte wählen (Rahmen: alles, was ganz darin liegt); gemeinsam verschieben, kopieren, löschen |
 | A | Aufzug setzen (drehen, Ebenen zuordnen im Aufzugsfenster) |
 | 1 | Raum/Korridor/Aufzug anklicken, dann ziehen = verschieben, gelbe Ecken = Größe |
 

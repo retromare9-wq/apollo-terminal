@@ -43,7 +43,7 @@ const snap = (v, s = 25) => Math.round(v / s) * s;
 const m = (u) => (u / UNITS_PER_M).toFixed(1);
 
 const TOOLS = [
-  { id: 'select', key: '1', label: 'AUSWAHL', hint: 'Objekt anklicken zum Auswählen und Verschieben · freie Fläche ziehen = Karte bewegen · Raum anklicken = Raumdaten' },
+  { id: 'select', key: '1', label: 'AUSWAHL', hint: 'Objekt anklicken zum Auswählen und Verschieben · freie Fläche ziehen = Karte bewegen · Raum anklicken = Raumdaten · Strg+Klick oder Strg+Rahmen ziehen = mehrere Objekte wählen' },
   { id: 'door', key: '2', label: 'TÜR', hint: 'In einen Gang klicken (Tür quer zum Gang) oder an eine Raumwand (Tür in der Wand). Stufe links wählen.' },
   { id: 'line', key: '3', label: 'TRENNLINIE', hint: 'Anfangspunkt klicken, dann Endpunkt klicken · Esc bricht ab · rastet am Raster ein' },
   { id: 'cam', key: '4', label: 'KAMERA', hint: 'In einen Raum oder Gang klicken · gelben Punkt ziehen = Richtung und Reichweite' },
@@ -70,6 +70,7 @@ const st = {
   vb: null,
   undo: [],
   redo: [],
+  multi: [],          // Mehrfachauswahl (Strg+Klick / Strg+Rahmen)
 };
 
 // ---------- Verlauf und Speichern ----------
@@ -116,6 +117,7 @@ function updateButtons() {
   $('#redo').disabled = !st.redo.length;
 }
 function validateSel() {
+  st.multi = [];
   const s0 = st.sel;
   if (!s0) return;
   if (s0.kind === 'room' && !roomById(s0.id)) st.sel = null;
@@ -220,6 +222,12 @@ function render() {
   ui = el('g', {}, svg);
   drawHandles();
   // Auswahl markieren
+  st.multi.forEach((it) => {
+    if (it.kind === 'room') info.plan.nodes[it.id]?.classList.add('sel');
+    else if (it.kind === 'corr') (info.plan.corrNodes[it.id] || []).forEach((n) => n.classList.add('ed-sel'));
+    else if (it.kind === 'lift') svg.querySelector(`[data-lift="${it.id}"]`)?.classList.add('ed-sel');
+    else info.plan.objects[it.id]?.classList.add('ed-sel');
+  });
   if (st.sel?.kind === 'corr') (info.plan.corrNodes[st.sel.id] || []).forEach((n) => n.classList.add('ed-sel'));
   if (st.sel?.kind === 'room') info.plan.nodes[st.sel.id]?.classList.add('sel');
   else if (st.sel?.kind === 'lift') svg.querySelector(`[data-lift="${st.sel.id}"]`)?.classList.add('ed-sel');
@@ -274,6 +282,9 @@ function drawUi(pt) {
       const r = d.o === 'h' ? { x: d.x - d.len / 2, y: d.y - 4.5, width: d.len, height: 9 } : { x: d.x - 4.5, y: d.y - d.len / 2, width: 9, height: d.len };
       el('rect', { ...r, class: `ly-door sec-${st.sec} ed-ghost` }, uiTemp);
     }
+  } else if (st.drag?.type === 'ctrlsel' && st.drag.moved) {
+    const r = norm4(st.drag.start, pt);
+    el('rect', { x: r[0], y: r[1], width: r[2] - r[0], height: r[3] - r[1], class: 'ed-marquee' }, uiTemp);
   } else if (st.drag?.type === 'draw') {
     const rc = drawRect(st.drag, pt);
     if (rc) el('rect', { x: rc[0], y: rc[1], width: rc[2] - rc[0], height: rc[3] - rc[1], class: 'ed-draw' }, uiTemp);
@@ -303,6 +314,19 @@ function ortho(a, b) {
 // ---------- Eigenschaften ----------
 
 function renderProps() {
+  if (st.multi.length > 1) {
+    const names = { room: 'RÄUME', corr: 'KORRIDORE', lift: 'AUFZÜGE', door: 'TÜREN', cam: 'KAMERAS', line: 'TRENNLINIEN', label: 'BESCHRIFTUNGEN' };
+    const count = {};
+    st.multi.forEach((it) => { count[it.kind] = (count[it.kind] || 0) + 1; });
+    props.innerHTML = `
+      <h3>${st.multi.length} OBJEKTE AUSGEWÄHLT</h3>
+      ${Object.entries(count).map(([k, n]) => `<div class="ed-row"><span class="dim">${names[k] || k}</span><span>${n}</span></div>`).join('')}
+      <div class="ed-btns"><button data-mcopy>KOPIEREN (STRG+C)</button><button class="danger" data-mdel>LÖSCHEN</button></div>
+      <p class="ed-note">Strg+Klick fügt Objekte hinzu oder nimmt sie heraus · mit gedrückter Strg-Taste einen Rahmen ziehen wählt alles, was ganz darin liegt · ein gewähltes Objekt ziehen verschiebt die ganze Gruppe (Türen und Kameras der Räume wandern mit) · Strg+V fügt die Kopie an der Mausposition ein · Esc hebt die Auswahl auf.</p>`;
+    props.querySelector('[data-mcopy]').addEventListener('click', copySel);
+    props.querySelector('[data-mdel]').addEventListener('click', deleteMulti);
+    return;
+  }
   const sel = st.sel;
   if (!sel) {
     const t = TOOLS.find((x) => x.id === st.tool);
@@ -515,6 +539,7 @@ function switchLevel(mi, li) {
   cur.li = li;
   bindLevel();
   st.sel = null;
+  st.multi = [];
   st.append = null;
   st.undo = [];
   st.redo = [];
@@ -626,6 +651,7 @@ function setDoorSec(d, sec) {
 
 function select(sel) {
   st.sel = sel;
+  st.multi = [];
   render();
   renderProps();
 }
@@ -679,13 +705,23 @@ function onDown(e) {
   }
 
   const liftEl = e.target.closest?.('[data-lift]');
-  if (liftEl && (st.tool === 'select' || st.tool === 'room')) {
+  if (liftEl && (st.tool === 'select' || st.tool === 'room') && !(st.tool === 'select' && (e.ctrlKey || e.metaKey || st.multi.length > 1))) {
     const id = liftEl.dataset.lift;
     if (st.tool === 'select' && st.sel?.kind === 'lift' && st.sel.id === id) { startPlanMove(e, pt, st.sel); return; }
     select({ kind: 'lift', id });
     return;
   }
 
+  if (st.tool === 'select' && (e.ctrlKey || e.metaKey)) {
+    // Strg: Klick = Objekt zur Auswahl hinzufügen/entfernen, Ziehen = Auswahlrahmen
+    st.drag = { type: 'ctrlsel', start: pt, sx: e.clientX, sy: e.clientY, hit: itemAt(e, pt), moved: false };
+    svg.setPointerCapture(e.pointerId);
+    return;
+  }
+  if (st.tool === 'select' && st.multi.length > 1) {
+    const hit = itemAt(e, pt);
+    if (hit && inMulti(hit)) { startGroupMove(e, pt); return; }
+  }
   if (st.tool === 'select') {
     const obj = objectAt(e);
     if (obj?.kind === 'rid') {
@@ -1158,80 +1194,216 @@ function resizePlan(d, pt) {
   render();
 }
 
+// ---------- Mehrfachauswahl ----------
+
+const sameItem = (a, b) => a.kind === b.kind && a.id === b.id;
+const inMulti = (it) => st.multi.some((x) => sameItem(x, it));
+
+// Objekt unter dem Mauszeiger: Tür/Kamera/Linie/Beschriftung, Aufzug, Raum, Korridor
+function itemAt(e, pt) {
+  const obj = objectAt(e);
+  if (obj) return obj.kind === 'rid' ? { kind: 'room', id: obj.id } : obj;
+  const lift = e.target.closest?.('[data-lift]');
+  if (lift) return { kind: 'lift', id: lift.dataset.lift };
+  return planAt(pt);
+}
+
+function setMulti(list) {
+  st.multi = list;
+  st.sel = list.length === 1 ? list[0] : null;
+  if (list.length === 1) st.multi = [];
+  render();
+  renderProps();
+}
+
+function toggleMulti(it) {
+  const base = st.multi.length ? st.multi.slice() : st.sel ? [st.sel] : [];
+  const i = base.findIndex((x) => sameItem(x, it));
+  if (i >= 0) base.splice(i, 1); else base.push(it);
+  setMulti(base);
+}
+
+// Alle Objekte vollständig im Rahmen
+function itemsIn(r) {
+  const inside = (x0, y0, x1, y1) => x0 >= r[0] && y0 >= r[1] && x1 <= r[2] && y1 <= r[3];
+  const out = [];
+  level.rooms.forEach((room) => { const b = bbox(room.rects); if (inside(...b)) out.push({ kind: 'room', id: room.id }); });
+  level.corridors.forEach((c, i) => { if (inside(c[0], c[1], c[2], c[3])) out.push({ kind: 'corr', id: i }); });
+  level.lifts.forEach((l) => { if (inside(...l.rect.slice(0, 4))) out.push({ kind: 'lift', id: l.id }); });
+  layer.doors.forEach((d) => { if (inside(d.x, d.y, d.x, d.y)) out.push({ kind: 'door', id: d.id }); });
+  layer.cams.forEach((c) => { if (inside(c.x, c.y, c.x, c.y)) out.push({ kind: 'cam', id: c.id }); });
+  layer.lines.forEach((l) => { if (inside(Math.min(l.x1, l.x2), Math.min(l.y1, l.y2), Math.max(l.x1, l.x2), Math.max(l.y1, l.y2))) out.push({ kind: 'line', id: l.id }); });
+  planLabels(level, layer).forEach((l) => { if (inside(l.x, l.y, l.x, l.y)) out.push({ kind: 'label', id: l.id }); });
+  return out;
+}
+
+const selection = () => (st.multi.length ? st.multi : st.sel ? [st.sel] : []);
+
+// Gruppe verschieben: Räume nehmen ihre Türen, Kameras und Raum-ID mit
+function startGroupMove(e, pt) {
+  const doors = new Map();
+  const cams = new Map();
+  const items = st.multi.map((it) => {
+    if (it.kind === 'room') {
+      const room = roomById(it.id);
+      roomDoors(layer, room).forEach((d) => doors.set(d.id, { o: d, x: d.x, y: d.y }));
+      roomCams(layer, room).forEach((c) => cams.set(c.id, { o: c, x: c.x, y: c.y }));
+      const idPos = layer.rooms[room.id]?.idPos;
+      return { it, rects: deep(room.rects), idPos: idPos ? { ...idPos } : null };
+    }
+    if (it.kind === 'corr') return { it, rect: level.corridors[it.id].slice() };
+    if (it.kind === 'lift') return { it, rect: level.lifts.find((l) => l.id === it.id).rect.slice() };
+    if (it.kind === 'door') { const d = find('door', it.id); doors.set(d.id, { o: d, x: d.x, y: d.y }); return null; }
+    if (it.kind === 'cam') { const c = find('cam', it.id); cams.set(c.id, { o: c, x: c.x, y: c.y }); return null; }
+    if (it.kind === 'line') return { it, line: { ...find('line', it.id) } };
+    if (it.kind === 'label') { const l = find('label', it.id); return { it, x: l.x, y: l.y }; }
+    return null;
+  }).filter(Boolean);
+  st.drag = { type: 'gmove', start: pt, items, doors: [...doors.values()], cams: [...cams.values()], moved: false };
+  svg.setPointerCapture(e.pointerId);
+}
+
+function moveGroup(d, pt) {
+  const dx = snap(pt.x - d.start.x, SNAP);
+  const dy = snap(pt.y - d.start.y, SNAP);
+  if (!d.moved) {
+    if (Math.hypot(pt.x - d.start.x, pt.y - d.start.y) < 6) return;
+    d.moved = true;
+    snapshot();
+  }
+  const sh = (r) => [r[0] + dx, r[1] + dy, r[2] + dx, r[3] + dy, ...r.slice(4)];
+  for (const x of d.items) {
+    const { it } = x;
+    if (it.kind === 'room') {
+      roomById(it.id).rects = x.rects.map(sh);
+      if (x.idPos) layer.rooms[it.id].idPos = { x: x.idPos.x + dx, y: x.idPos.y + dy };
+    } else if (it.kind === 'corr') level.corridors[it.id] = sh(x.rect);
+    else if (it.kind === 'lift') level.lifts.find((l) => l.id === it.id).rect = sh(x.rect);
+    else if (it.kind === 'line') Object.assign(find('line', it.id), { x1: x.line.x1 + dx, y1: x.line.y1 + dy, x2: x.line.x2 + dx, y2: x.line.y2 + dy });
+    else if (it.kind === 'label') patchLabel(it.id, { x: x.x + dx, y: x.y + dy });
+  }
+  d.doors.forEach((x) => { x.o.x = x.x + dx; x.o.y = x.y + dy; });
+  d.cams.forEach((x) => { x.o.x = x.x + dx; x.o.y = x.y + dy; });
+  render();
+}
+
+function deleteMulti() {
+  const list = st.multi;
+  if (!confirm(`${list.length} ausgewählte Objekte löschen?`)) return;
+  snapshot();
+  const ids = (k) => new Set(list.filter((x) => x.kind === k).map((x) => x.id));
+  const rooms = ids('room');
+  level.rooms = level.rooms.filter((r) => !rooms.has(r.id));
+  LV.plan.rooms = level.rooms;
+  rooms.forEach((id) => delete layer.rooms[id]);
+  [...ids('corr')].sort((a, b) => b - a).forEach((i) => level.corridors.splice(i, 1));
+  const lifts = ids('lift');
+  level.lifts = level.lifts.filter((l) => !lifts.has(l.id));
+  LV.plan.lifts = level.lifts;
+  lifts.forEach((id) => delete layer.lifts[id]);
+  for (const [k, arr] of [['door', 'doors'], ['cam', 'cams'], ['line', 'lines']]) {
+    const s0 = ids(k);
+    layer[arr] = layer[arr].filter((o) => !s0.has(o.id));
+  }
+  ids('label').forEach((id) => { if (layer.labels[id]?.custom) delete layer.labels[id]; else patchLabel(id, { hidden: true }); });
+  st.multi = [];
+  st.sel = null;
+  commit();
+  renderProps();
+}
+
 // ---------- Kopieren und Einfügen (Strg+C / Strg+V) ----------
 
 const deep = (o) => JSON.parse(JSON.stringify(o));
 
-function copySel() {
-  const sel = st.sel;
-  if (!sel) return;
-  let clip = null;
+// Kopie eines Objekts mit Bezugspunkt (obere linke Ecke)
+function clipOf(sel) {
   if (sel.kind === 'room') {
     const room = roomById(sel.id);
     const info = deep(layer.rooms[room.id] || {});
     delete info.code;
-    clip = { kind: 'room', room: deep(room), info, box: bbox(room.rects) };
-  } else if (sel.kind === 'corr') {
+    return { kind: 'room', room: deep(room), info, box: bbox(room.rects) };
+  }
+  if (sel.kind === 'corr') {
     const c = level.corridors[sel.id];
-    clip = { kind: 'corr', rect: deep(c), box: c.slice(0, 4) };
-  } else if (sel.kind === 'lift') {
+    return { kind: 'corr', rect: deep(c), box: c.slice(0, 4) };
+  }
+  if (sel.kind === 'lift') {
     const l = level.lifts.find((x) => x.id === sel.id);
     const info = deep(layer.lifts[l.id] || {});
     delete info.letter;
-    clip = { kind: 'lift', lift: deep(l), info, box: l.rect.slice(0, 4) };
-  } else if (['door', 'cam', 'line'].includes(sel.kind)) {
+    return { kind: 'lift', lift: deep(l), info, box: l.rect.slice(0, 4) };
+  }
+  if (['door', 'cam', 'line'].includes(sel.kind)) {
     const o = find(sel.kind, sel.id);
     const box = sel.kind === 'line' ? [Math.min(o.x1, o.x2), Math.min(o.y1, o.y2)] : [o.x, o.y];
-    clip = { kind: sel.kind, obj: deep(o), box };
-  } else if (sel.kind === 'label') {
-    const l = find('label', sel.id);
-    clip = { kind: 'label', obj: { text: l.text, x: l.x, y: l.y }, box: [l.x, l.y] };
+    return { kind: sel.kind, obj: deep(o), box };
   }
-  if (!clip) return;
-  st.clip = clip;
-  toast('KOPIERT – STRG+V FÜGT AN DER MAUSPOSITION EIN');
+  if (sel.kind === 'label') {
+    const l = find('label', sel.id);
+    return { kind: 'label', obj: { text: l.text, x: l.x, y: l.y }, box: [l.x, l.y] };
+  }
+  return null;
 }
 
-function pasteClip() {
-  const c = st.clip;
-  if (!c) return;
-  // Ziel: obere linke Ecke an die Mausposition, sonst leicht versetzt
-  const at = st.mouse ? snapP(st.mouse) : { x: c.box[0] + 50, y: c.box[1] + 50 };
-  const dx = at.x - c.box[0];
-  const dy = at.y - c.box[1];
+function copySel() {
+  const items = selection().map(clipOf).filter(Boolean);
+  if (!items.length) return;
+  const box = [Math.min(...items.map((c) => c.box[0])), Math.min(...items.map((c) => c.box[1]))];
+  st.clip = { items, box };
+  toast(`${items.length > 1 ? `${items.length} OBJEKTE` : 'OBJEKT'} KOPIERT – STRG+V FÜGT AN DER MAUSPOSITION EIN`);
+}
+
+function pasteItem(c, dx, dy) {
   const sh = (r) => [r[0] + dx, r[1] + dy, r[2] + dx, r[3] + dy, ...deep(r.slice(4))];
-  snapshot();
   if (c.kind === 'room') {
     const room = { ...deep(c.room), id: nextRoomId(), rects: c.room.rects.map(sh) };
     level.rooms.push(room);
     const info = deep(c.info);
     if (info.idPos) info.idPos = { x: info.idPos.x + dx, y: info.idPos.y + dy };
     if (Object.keys(info).length) layer.rooms[room.id] = info;
-    st.sel = { kind: 'room', id: room.id };
-  } else if (c.kind === 'corr') {
+    return { kind: 'room', id: room.id };
+  }
+  if (c.kind === 'corr') {
     level.corridors.push(sh(c.rect));
-    st.sel = { kind: 'corr', id: level.corridors.length - 1 };
-  } else if (c.kind === 'lift') {
+    return { kind: 'corr', id: level.corridors.length - 1 };
+  }
+  if (c.kind === 'lift') {
     const used = new Set(level.lifts.map((l) => l.id));
     const id = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('').find((x) => !used.has(x)) || uid('L');
     level.lifts.push({ ...deep(c.lift), id, rect: sh(c.lift.rect) });
     if (Object.keys(c.info).length) layer.lifts[id] = deep(c.info);
-    st.sel = { kind: 'lift', id };
-  } else if (c.kind === 'line') {
+    return { kind: 'lift', id };
+  }
+  if (c.kind === 'line') {
     const o = { ...deep(c.obj), id: uid('l'), x1: c.obj.x1 + dx, y1: c.obj.y1 + dy, x2: c.obj.x2 + dx, y2: c.obj.y2 + dy };
     layer.lines.push(o);
-    st.sel = { kind: 'line', id: o.id };
-  } else if (c.kind === 'door' || c.kind === 'cam') {
+    return { kind: 'line', id: o.id };
+  }
+  if (c.kind === 'door' || c.kind === 'cam') {
     const o = { ...deep(c.obj), id: uid(c.kind === 'door' ? 'd' : 'c'), x: c.obj.x + dx, y: c.obj.y + dy };
     (c.kind === 'door' ? layer.doors : layer.cams).push(o);
-    st.sel = { kind: c.kind, id: o.id };
-  } else if (c.kind === 'label') {
-    const id = uid('lbl');
-    layer.labels[id] = { custom: true, text: c.obj.text, x: at.x, y: at.y };
-    st.sel = { kind: 'label', id };
+    return { kind: c.kind, id: o.id };
   }
+  if (c.kind === 'label') {
+    const id = uid('lbl');
+    layer.labels[id] = { custom: true, text: c.obj.text, x: c.obj.x + dx, y: c.obj.y + dy };
+    return { kind: 'label', id };
+  }
+  return null;
+}
+
+function pasteClip() {
+  const c = st.clip;
+  if (!c) return;
+  // Ziel: obere linke Ecke der Kopie an die Mausposition, sonst leicht versetzt
+  const at = st.mouse ? snapP(st.mouse) : { x: c.box[0] + 50, y: c.box[1] + 50 };
+  const dx = at.x - c.box[0];
+  const dy = at.y - c.box[1];
+  snapshot();
+  const added = c.items.map((it) => pasteItem(it, dx, dy)).filter(Boolean);
   commit();
-  renderProps();
+  setMulti(added);
 }
 
 function startPan(e, clickSelectsRoom = false) {
@@ -1261,6 +1433,12 @@ function onMove(e) {
     return;
   }
   if (d.type === 'draw') { drawUi(pt); return; }
+  if (d.type === 'ctrlsel') {
+    if (!d.moved && Math.abs(e.clientX - d.sx) + Math.abs(e.clientY - d.sy) > 4) d.moved = true;
+    if (d.moved) { d.end = pt; drawUi(pt); }
+    return;
+  }
+  if (d.type === 'gmove') { moveGroup(d, pt); return; }
   if (d.type === 'pmove') { movePlan(d, pt); return; }
   if (d.type === 'resize') { resizePlan(d, pt); return; }
   if (d.type === 'rid') {
@@ -1311,8 +1489,18 @@ function onUp(e) {
     return;
   }
   if (d.type === 'draw') { st.ctrl = e.ctrlKey || e.metaKey; finishDraw(d, toMap(e)); drawUi(); return; }
+  if (d.type === 'ctrlsel') {
+    if (d.moved && d.end) {
+      const r = norm4(d.start, d.end);
+      const base = st.multi.length ? st.multi.slice() : st.sel ? [st.sel] : [];
+      itemsIn(r).forEach((it) => { if (!base.some((x) => sameItem(x, it))) base.push(it); });
+      setMulti(base);
+    } else if (d.hit) toggleMulti(d.hit);
+    drawUi();
+    return;
+  }
   if (d.type === 'resize' && !d.moved) { st.undo.pop(); updateButtons(); return; }
-  if (d.type === 'handle' || ((d.type === 'move' || d.type === 'rid' || d.type === 'pmove' || d.type === 'resize') && d.moved)) {
+  if (d.type === 'handle' || ((d.type === 'move' || d.type === 'rid' || d.type === 'pmove' || d.type === 'resize' || d.type === 'gmove') && d.moved)) {
     commit();
     renderProps();
   }
@@ -1554,6 +1742,7 @@ function init() {
     const t = TOOLS.find((x) => x.key === k);
     if (t) { setTool(t.id); return; }
     if (k === 'escape') { if (st.lineStart) { st.lineStart = null; drawUi(); } else { st.append = null; select(null); } return; }
+    if ((k === 'delete' || k === 'backspace') && st.multi.length > 1) { e.preventDefault(); deleteMulti(); return; }
     if ((k === 'delete' || k === 'backspace') && st.sel) {
       e.preventDefault();
       if (['room', 'corr', 'lift'].includes(st.sel.kind)) deletePlanItem(st.sel); else remove(st.sel.kind, st.sel.id);

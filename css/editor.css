@@ -191,3 +191,5 @@ svg.z-mid .mm-minor { stroke: transparent; }
 .ed-colrow input[type=color] { width: 54px; height: 30px; border: 2px solid var(--amber-dim); background: #120905; padding: 1px; cursor: pointer; }
 .editor button.ed-mini { padding: 3px 7px; font-size: 10px; }
 .ed-big { font-size: 13px; margin: 8px 0 4px; }
+
+.ed-marquee { fill: rgba(108, 196, 149, .1); stroke: var(--mint); stroke-width: 1.5; stroke-dasharray: 5 4; vector-effect: non-scaling-stroke; pointer-events: none; }
