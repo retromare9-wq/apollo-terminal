@@ -90,7 +90,7 @@ den Rahmen von Räumen und Korridoren.
 | Q | Raum zeichnen (Rechteck aufziehen in 5-mm-Schritten, mit Strg in 1-mm-Schritten; „+ TEILFLÄCHE“ baut an einen Raum an) |
 | W / E | Korridor schmal (1,5 m) / breit (2,5 m): Strecke ziehen, feste Breite; mit Strg frei in 1-mm-Schritten |
 | Strg+C / Strg+V | Gewähltes Objekt kopieren / an der Mausposition einfügen |
-| Strg+Klick / Strg+Rahmen | Mehrere Objekte wählen (Rahmen: alles, was ganz darin liegt); gemeinsam verschieben, kopieren, löschen |
+| Strg+Klick / Strg+Rahmen | Mehrere Objekte wählen (Rahmen: alles, was ganz darin liegt); gemeinsam verschieben, kopieren, löschen, Farben ändern |
 | 1 | Raum/Korridor/Aufzug anklicken, dann ziehen = verschieben, gelbe Ecken = Größe |
 
 Räume und Korridore bekommen eigene Farben für Fläche und Rahmen. Wo Korridor- und Raumrahmen
@@ -145,6 +145,13 @@ Wörter wie SCHADEN, WARNUNG, OFFLINE oder NICHT ERREICHBAR werden in Berichten 
 
 Die Sternenkarte ist eine Vektor-Nachzeichnung der Vorlage „Stars of the Middle Heavens“
 (`js/starmap-data.js`, erzeugt mit den Skripten in `tools/starmap`).
+
+## Sichern
+
+Der Editor speichert automatisch im Browser (localStorage) – nur in diesem Browser auf diesem Gerät.
+Browserdaten löschen, privates Fenster oder ein anderer Browser/PC bedeuten: Daten nicht da.
+Darum regelmäßig **EXPORTIEREN** (Datei mit Datum im Namen). Der Knopf blinkt rot, wenn seit
+20 Minuten nicht exportierte Änderungen vorliegen. Wiederherstellen mit **IMPORTIEREN**.
 
 ## Lokal starten
 

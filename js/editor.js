@@ -92,6 +92,7 @@ function snapshot() {
   updateButtons();
 }
 function commit() {
+  markDirty();
   const ok1 = saveLayer(LV.id, layer);
   level = asLevel(MAP, LV);
   const ok2 = savePlans(plans);
@@ -356,9 +357,11 @@ function renderProps() {
     props.innerHTML = `
       <h3>${st.multi.length} OBJEKTE AUSGEWÄHLT</h3>
       ${Object.entries(count).map(([k, n]) => `<div class="ed-row"><span class="dim">${names[k] || k}</span><span>${n}</span></div>`).join('')}
+      ${multiColors(count)}
       <div class="ed-btns"><button data-mcopy>KOPIEREN (STRG+C)</button><button class="danger" data-mdel>LÖSCHEN</button></div>
       <p class="ed-note">Strg+Klick fügt Objekte hinzu oder nimmt sie heraus · mit gedrückter Strg-Taste einen Rahmen ziehen wählt alles, was ganz darin liegt · ein gewähltes Objekt ziehen verschiebt die ganze Gruppe (Türen und Kameras der Räume wandern mit) · Strg+V fügt die Kopie an der Mausposition ein · Esc hebt die Auswahl auf.</p>`;
     props.querySelector('[data-mcopy]').addEventListener('click', copySel);
+    bindMultiColors();
     props.querySelector('[data-mdel]').addEventListener('click', deleteMulti);
     return;
   }
@@ -1404,6 +1407,49 @@ function moveGroup(d, pt) {
   render();
 }
 
+// Farben für alle ausgewählten Räume bzw. Korridore gleichzeitig
+function multiColors(count) {
+  const part = (kind, title) => {
+    if (!count[kind]) return '';
+    const first = st.multi.find((x) => x.kind === kind);
+    const src = kind === 'room' ? roomById(first.id) : (level.corridors[first.id][4] || {});
+    const row = (k, label) => `<div class="ed-crow ed-colrow"><span class="ed-cname">${label}</span><input type="color" data-mcol="${kind}:${k}" value="${src[k] || DEF[kind][k]}"><button class="ed-mini" data-mcoldef="${kind}:${k}">STANDARD</button></div>`;
+    return `<div class="ed-field">${title} (${count[kind]})</div>${row('fill', 'FLÄCHE')}${row('stroke', 'RAHMEN')}`;
+  };
+  const html = part('room', 'FARBEN ALLER GEWÄHLTEN RÄUME') + part('corr', 'FARBEN ALLER GEWÄHLTEN KORRIDORE');
+  return html ? `<h3 class="ed-h3">FARBEN</h3>${html}` : '';
+}
+
+function setMultiColor(kind, k, v) {
+  st.multi.filter((x) => x.kind === kind).forEach((it) => {
+    if (kind === 'room') {
+      const r = roomById(it.id);
+      if (v) r[k] = v; else delete r[k];
+    } else {
+      const c = level.corridors[it.id];
+      const o = { ...(c[4] || {}) };
+      if (v) o[k] = v; else delete o[k];
+      level.corridors[it.id] = Object.keys(o).length ? [...c.slice(0, 4), o] : c.slice(0, 4);
+    }
+  });
+}
+
+function bindMultiColors() {
+  props.querySelectorAll('[data-mcol]').forEach((inp) => {
+    const [kind, k] = inp.dataset.mcol.split(':');
+    inp.addEventListener('pointerdown', snapshot, { once: true });
+    inp.addEventListener('focus', snapshot, { once: true });
+    inp.addEventListener('input', () => { setMultiColor(kind, k, inp.value); commit(); });
+  });
+  props.querySelectorAll('[data-mcoldef]').forEach((b) => b.addEventListener('click', () => {
+    const [kind, k] = b.dataset.mcoldef.split(':');
+    snapshot();
+    setMultiColor(kind, k, '');
+    commit();
+    renderProps();
+  }));
+}
+
 function deleteMulti() {
   const list = st.multi;
   if (!confirm(`${list.length} ausgewählte Objekte löschen?`)) return;
@@ -1631,13 +1677,31 @@ function onUp(e) {
 // ---------- Export / Import ----------
 
 // Export: alle Karten mit Ebenen, deren Türen/Kameras/Raumdaten, Ausrüstung und Terminal-Texte
+// Erinnerung: seit wann gibt es Änderungen, die noch nicht exportiert wurden?
+const DIRTY_KEY = 'apollo.editor.unexported';
+function markDirty() {
+  try { if (!localStorage.getItem(DIRTY_KEY)) localStorage.setItem(DIRTY_KEY, String(Date.now())); } catch { /* egal */ }
+}
+function updateExportHint() {
+  let since = 0;
+  try { since = Number(localStorage.getItem(DIRTY_KEY)) || 0; } catch { /* egal */ }
+  const btn = $('#export');
+  const min = since ? Math.floor((Date.now() - since) / 60000) : 0;
+  btn.classList.toggle('ed-remind', !!since && min >= 20);
+  btn.title = since ? `Nicht exportierte Änderungen seit ${min} Min. – Sicherungsdatei herunterladen` : 'Alles exportiert';
+}
+
 function exportLayer() {
   const layers = {};
   plans.maps.forEach((mp) => mp.levels.forEach((lv) => { layers[lv.id] = lv.id === LV.id ? layer : loadLayer(lv.id, LAYER_FALLBACK[lv.id]); }));
   const clean = JSON.parse(JSON.stringify(plans));
   clean.maps.forEach((mp) => mp.levels.forEach((lv) => { delete lv.plan.bounds; delete lv.plan.mapName; }));
   const data = { format: 'apollo-map-layer', version: 5, level: LV.id, layer, plans: clean, layers, equipment: exportEquipment(), content: currentContent() };
-  download(new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' }), 'apollo-karten.json');
+  const d = new Date();
+  const stamp = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}_${String(d.getHours()).padStart(2, '0')}${String(d.getMinutes()).padStart(2, '0')}`;
+  download(new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' }), `apollo-karten_${stamp}.json`);
+  try { localStorage.removeItem(DIRTY_KEY); } catch { /* egal */ }
+  updateExportHint();
 }
 
 function download(blob, name) {
@@ -1883,6 +1947,8 @@ function init() {
     if (e.key === PLANS_KEY) { plans = loadPlans(); bindLevel(); validateSel(); render(); renderProps(); renderLevelPick(); }
   });
 
+  updateExportHint();
+  setInterval(updateExportHint, 30000);
   homeView();
   setTool('select');
   setSec('green');

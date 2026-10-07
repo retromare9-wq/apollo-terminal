@@ -197,3 +197,5 @@ svg.z-mid .mm-minor { stroke: transparent; }
 .ed-zonemode { display: grid; grid-template-columns: 1fr 1fr; gap: 5px; margin: 0 0 8px 22px; }
 .ed-zonemode button.on { background: var(--yellow); color: var(--ink); border-color: var(--yellow); }
 .editor .ly-shaft { cursor: pointer; }
+
+.editor button.ed-remind { border-color: var(--red); color: var(--ink); background: var(--red); animation: blink 1.6s steps(1) infinite; }

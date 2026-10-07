@@ -79,7 +79,10 @@ export function loadContent() {
 }
 
 export function saveContent(c) {
-  try { localStorage.setItem(CONTENT_KEY, JSON.stringify({ ...c, v: VERSION })); } catch { /* ignorieren */ }
+  try {
+    localStorage.setItem(CONTENT_KEY, JSON.stringify({ ...c, v: VERSION }));
+    if (!localStorage.getItem('apollo.editor.unexported')) localStorage.setItem('apollo.editor.unexported', String(Date.now()));
+  } catch { /* ignorieren */ }
   applyContent({ ...c, v: VERSION });
 }
 
