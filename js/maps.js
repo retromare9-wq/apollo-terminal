@@ -517,7 +517,7 @@ export class MapView {
       <div class="sp-row"><span class="dim">ZUGÄNGE</span><span>${doors.length}${levels.length ? ` · ${levels.map((k) => `<span class="sec-t sec-${k}">${SECURITY[k].label}</span>`).join(' ')}` : ''}</span></div>
       <div class="sp-row"><span class="dim">STATUS</span><span>${st}</span></div>
       ${data.cluttered ? '<div class="sp-row"><span class="dim">ZUSTAND</span><span class="warn">CLUTTERED</span></div>' : ''}
-      ${roomShafts(layer, room).filter((x) => !x.hidden).length ? `<div class="sp-row"><span class="dim">SCHACHTZUGANG</span><span>${roomShafts(layer, room).filter((x) => !x.hidden).map((x) => esc(x.sid || roomCode(room, layer))).join(', ')}</span></div>` : ''}
+      ${roomShafts(layer, room).filter((x) => x.show).length ? `<div class="sp-row"><span class="dim">SCHACHTZUGANG</span><span>${roomShafts(layer, room).filter((x) => x.show).map((x) => esc(x.sid || roomCode(room, layer))).join(', ')}</span></div>` : ''}
       ${layer.settings.showCams ? `<div class="sp-row"><span class="dim">ÜBERWACHUNG</span><span>${cams ? `<span class="mint">KAMERA AKTIV${cams > 1 ? ` (${cams})` : ''}</span>` : 'KEINE KAMERA'}</span></div>` : ''}
       ${data.picto?.length ? `<div class="sp-pics">${data.picto.map((p) => semioticSvg(p.id, 38)).join('')}</div>` : ''}
       ${data.info ? `<div class="sp-note">${esc(data.info)}</div>` : ''}

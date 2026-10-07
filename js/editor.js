@@ -271,6 +271,11 @@ function drawHandles() {
   const put = (rect, tag) => CORNERS.forEach(([cx, cy], k) => el('rect', { x: rect[cx] - r, y: rect[cy] - r, width: r * 2, height: r * 2, class: 'ed-handle', 'data-phandle': `${tag}:${k}` }, ui));
   if (sel.kind === 'room') roomById(sel.id)?.rects.forEach((rc, i) => put(rc, `room:${i}`));
   if (sel.kind === 'corr' && level.corridors[sel.id]) put(level.corridors[sel.id], 'corr:0');
+  if (sel.kind === 'line') {
+    const l = find('line', sel.id);
+    if (l?.box) put(zoneRect(l), 'zone:0');
+    else if (l) [[l.x1, l.y1], [l.x2, l.y2]].forEach(([x, y], k) => el('rect', { x: x - r, y: y - r, width: r * 2, height: r * 2, class: 'ed-handle', 'data-phandle': `zline:${k}:0` }, ui));
+  }
 }
 
 // Vorschau: Tür-Geist, Linienvorschau (wird bei Mausbewegung aktualisiert)
@@ -416,7 +421,7 @@ function renderProps() {
       ${l.box ? `<div class="ed-row"><span class="dim">GRÖSSE</span><span>${m(Math.abs(l.x2 - l.x1))} × ${m(Math.abs(l.y2 - l.y1))} M</span></div>`
         : `<div class="ed-row"><span class="dim">LÄNGE</span><span>${m(Math.hypot(l.x2 - l.x1, l.y2 - l.y1))} M</span></div>`}
       <div class="ed-btns"><button class="danger" data-del>ZONE LÖSCHEN</button></div>
-      <p class="ed-note">Mit dem Auswahl-Werkzeug ziehen, um die Zone zu verschieben (rastet auf jeden Millimeter ein).</p>`;
+      <p class="ed-note">Mit dem Auswahl-Werkzeug ziehen = verschieben (rastet auf jeden Millimeter ein) · gelbe ${l.box ? 'Ecken ziehen = Größe ändern in 5-mm-Schritten, mit Strg in 1-mm-Schritten' : 'Endpunkte ziehen = Länge und Richtung ändern'} · Strg+C / Strg+V kopiert.</p>`;
   } else if (sel.kind === 'shaft') {
     const sh = find('shaft', sel.id);
     const room = roomAt(level, sh.x + SHAFT / 2, sh.y + SHAFT / 2);
@@ -425,13 +430,14 @@ function renderProps() {
       <h3>SCHACHTZUGANG</h3>
       <div class="ed-row"><span class="dim">RAUM</span><span>${room ? esc(roomName(level, room, layer)) : '– (AUSSERHALB) –'}</span></div>
       <label class="ed-field">SCHACHT-ID <input type="text" data-sk="sid" maxlength="30" value="${esc(sh.sid)}" placeholder="${esc(def || 'SCHACHT')}"></label>
-      <label class="ed-check ed-big"><input type="checkbox" data-shvis ${sh.hidden ? '' : 'checked'}> AUF DER TERMINAL-KARTE ANZEIGEN</label>
+      <label class="ed-check ed-big"><input type="checkbox" data-shvis ${sh.show ? 'checked' : ''}> AUF DER TERMINAL-KARTE ANZEIGEN</label>
       <label class="ed-field">NOTIZ <textarea data-sk="note" maxlength="1000">${esc(sh.note)}</textarea></label>
       <div class="ed-btns"><button class="danger" data-del>SCHACHTZUGANG LÖSCHEN</button></div>
       <p class="ed-note">Ohne eigene Schacht-ID gilt die ID des Raums. Ausgeblendete Zugänge erscheinen im Editor blass gestrichelt. Mit dem Auswahl-Werkzeug ziehen = verschieben.</p>`;
     props.querySelector('[data-shvis]').addEventListener('change', (e) => {
       snapshot();
-      if (e.target.checked) delete sh.hidden; else sh.hidden = true;
+      if (e.target.checked) sh.show = true; else delete sh.show;
+      delete sh.hidden;
       commit();
     });
     props.querySelectorAll('[data-sk]').forEach((inp) => {
@@ -1233,9 +1239,19 @@ function movePlan(d, pt) {
 }
 
 // Größe ändern über einen Eckanfasser
+const zoneRect = (l) => [Math.min(l.x1, l.x2), Math.min(l.y1, l.y2), Math.max(l.x1, l.x2), Math.max(l.y1, l.y2)];
+
 function startResize(e, tag) {
   const [kind, part, corner] = tag.split(':');
-  const rect = kind === 'room' ? roomById(st.sel.id).rects[Number(part)] : level.corridors[st.sel.id];
+  if (kind === 'zline') {
+    // Endpunkt einer Zonenlinie ziehen
+    st.drag = { type: 'zline', end: Number(part), moved: false };
+    snapshot();
+    svg.setPointerCapture(e.pointerId);
+    return;
+  }
+  const rect = kind === 'room' ? roomById(st.sel.id).rects[Number(part)]
+    : kind === 'zone' ? zoneRect(find('line', st.sel.id)) : level.corridors[st.sel.id];
   st.drag = { type: 'resize', kind, part: Number(part), corner: Number(corner), orig: rect.slice(), moved: false };
   snapshot();
   svg.setPointerCapture(e.pointerId);
@@ -1256,7 +1272,18 @@ function resizePlan(d, pt) {
   const out = [Math.min(ox, nx), Math.min(oy, ny), Math.max(ox, nx), Math.max(oy, ny), ...o.slice(4)];
   d.moved = true;
   if (d.kind === 'room') roomById(st.sel.id).rects[d.part] = out;
+  else if (d.kind === 'zone') Object.assign(find('line', st.sel.id), { x1: out[0], y1: out[1], x2: out[2], y2: out[3] });
   else level.corridors[st.sel.id] = out;
+  render();
+}
+
+function resizeZoneLine(d, pt) {
+  const l = find('line', st.sel.id);
+  const other = d.end === 0 ? { x: l.x2, y: l.y2 } : { x: l.x1, y: l.y1 };
+  const q = ortho(other, { x: snap(pt.x, MM), y: snap(pt.y, MM) });
+  if (Math.hypot(q.x - other.x, q.y - other.y) < MM) return;
+  d.moved = true;
+  if (d.end === 0) Object.assign(l, { x1: q.x, y1: q.y }); else Object.assign(l, { x2: q.x, y2: q.y });
   render();
 }
 
@@ -1509,6 +1536,7 @@ function onMove(e) {
   if (d.type === 'gmove') { moveGroup(d, pt); return; }
   if (d.type === 'pmove') { movePlan(d, pt); return; }
   if (d.type === 'resize') { resizePlan(d, pt); return; }
+  if (d.type === 'zline') { resizeZoneLine(d, pt); return; }
   if (d.type === 'rid') {
     if (!d.moved) {
       if (Math.hypot(pt.x - d.start.x, pt.y - d.start.y) < 4) return;
@@ -1570,8 +1598,8 @@ function onUp(e) {
     drawUi();
     return;
   }
-  if (d.type === 'resize' && !d.moved) { st.undo.pop(); updateButtons(); return; }
-  if (d.type === 'handle' || ((d.type === 'move' || d.type === 'rid' || d.type === 'pmove' || d.type === 'resize' || d.type === 'gmove') && d.moved)) {
+  if ((d.type === 'resize' || d.type === 'zline') && !d.moved) { st.undo.pop(); updateButtons(); return; }
+  if (d.type === 'handle' || ((d.type === 'move' || d.type === 'rid' || d.type === 'pmove' || d.type === 'resize' || d.type === 'zline' || d.type === 'gmove') && d.moved)) {
     commit();
     renderProps();
   }
@@ -1639,7 +1667,7 @@ function roomListBlocks() {
     blocks.push({ kv: ['Cluttered', e.d.cluttered ? 'Ja' : 'Nein'] });
     blocks.push({ kv: ['Status', STATUS[e.d.status || '']] });
     const shafts = roomShafts(layer, e.room);
-    if (shafts.length) blocks.push({ kv: ['Schachtzugänge', shafts.map((x) => `${x.sid || e.code}${x.hidden ? ' [nicht im Terminal]' : ''}${x.note ? ` (${x.note})` : ''}`).join('; ')] });
+    if (shafts.length) blocks.push({ kv: ['Schachtzugänge', shafts.map((x) => `${x.sid || e.code}${x.show ? '' : ' [nicht im Terminal]'}${x.note ? ` (${x.note})` : ''}`).join('; ')] });
     blocks.push({ kv: ['Türen', e.doors] });
     blocks.push({ kv: ['Kameras', String(e.cams)] });
     blocks.push({ kv: ['Piktogramme', e.d.picto?.length ? e.d.picto.map((p) => `${semioticById(p.id)?.name}${p.map ? ' (auf der Karte)' : ''}`).join(', ') : '–'] });

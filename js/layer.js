@@ -207,8 +207,8 @@ export function drawLayer(g, level, layer, { cams = true, editor = false } = {})
   // Schachtzugänge: kleiner blauer Kasten
   const shaftLayer = el('g', { class: 'ly-shafts' }, g);
   (layer.shafts || []).forEach((s) => {
-    if (s.hidden && !editor) return;   // im Terminal ausgeblendet
-    nodes[s.id] = el('rect', { x: s.x, y: s.y, width: SHAFT, height: SHAFT, class: `ly-shaft${s.hidden ? ' off' : ''}`, 'data-oid': s.id, 'data-kind': 'shaft' }, shaftLayer);
+    if (!s.show && !editor) return;   // im Terminal nur mit Häkchen „anzeigen“
+    nodes[s.id] = el('rect', { x: s.x, y: s.y, width: SHAFT, height: SHAFT, class: `ly-shaft${s.show ? '' : ' off'}`, 'data-oid': s.id, 'data-kind': 'shaft' }, shaftLayer);
   });
 
   const doorLayer = el('g', { class: 'ly-doors' }, g);

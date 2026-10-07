@@ -84,7 +84,7 @@ Raster wie Millimeterpapier: 1 Kästchen = 1 mm = 0,5 m, dicke Linie = 1 cm = 5 
 |---|---|
 | 1–4 | Auswahl, Radierer, Beschriftung, Piktogramm |
 | 5–8 | Tür, Aufzug, Kamera, Schachtzugang (2 × 2 mm, Schacht-ID und Notiz) |
-| A | Zonen: Linie (rastet auf jeden mm ein) oder Kasten (wie Räume) |
+| A | Zonen: Linie (rastet auf jeden mm ein, Endpunkte ziehbar) oder Kasten (wie Räume, Ecken ziehbar) |
 | Q | Raum zeichnen (Rechteck aufziehen in 5-mm-Schritten, mit Strg in 1-mm-Schritten; „+ TEILFLÄCHE“ baut an einen Raum an) |
 | W / E | Korridor schmal (1,5 m) / breit (2,5 m): Strecke ziehen, feste Breite; mit Strg frei in 1-mm-Schritten |
 | Strg+C / Strg+V | Gewähltes Objekt kopieren / an der Mausposition einfügen |
@@ -112,7 +112,7 @@ und Notiz eintragen.
 | 5 | Tür (in einen Gang oder an eine Raumwand klicken) |
 | 6 | Aufzug |
 | 7 | Kamera (gelben Punkt ziehen = Richtung und Reichweite) |
-| 8 | Schachtzugang (Häkchen „AUF DER TERMINAL-KARTE ANZEIGEN“ je Zugang) |
+| 8 | Schachtzugang (im Terminal nur mit Häkchen „AUF DER TERMINAL-KARTE ANZEIGEN“) |
 | G / O / R | Sicherheitsstufe (auch für die gewählte Tür) |
 | Entf · Strg+Z · Strg+Y | Löschen · Rückgängig · Wiederholen |
 
