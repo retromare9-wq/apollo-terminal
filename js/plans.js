@@ -9,7 +9,7 @@ import { LAYER0 } from './station-layer0.js';
 
 export const PLANS_KEY = 'apollo.plans.v1';
 export const MM = 10;                 // Einheiten pro Millimeter Papier
-export const SNAP = 5;                // Einrasten: ½ mm (passt auch zum alten 25er-Raster)
+export const SNAP = 10;               // Einrasten: auf jeden Millimeter des Rasters
 export const CORR_W = { narrow: 30, wide: 50 };   // 1,5 m und 2,5 m
 
 // Vorgabe der editierbaren Schicht je Ebene (sonst leer)

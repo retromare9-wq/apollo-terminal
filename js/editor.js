@@ -247,19 +247,39 @@ function render() {
 }
 
 // Millimeterpapier: feine Linie je mm, kräftiger je 5 mm und je cm
+// Als echte Linien (kein Muster), damit Raster und Objekte bei jedem Zoom exakt übereinanderliegen
 function drawGrid(g) {
-  const defs = el('defs', {}, g);
-  const pat = el('pattern', { id: 'mmgrid', width: MM * 10, height: MM * 10, patternUnits: 'userSpaceOnUse' }, defs);
-  for (let i = 0; i < 10; i++) {
-    const cls = i === 0 ? 'mm-major' : i === 5 ? 'mm-mid' : 'mm-minor';
-    el('line', { x1: i * MM, y1: 0, x2: i * MM, y2: MM * 10, class: cls }, pat);
-    el('line', { x1: 0, y1: i * MM, x2: MM * 10, y2: i * MM, class: cls }, pat);
-  }
   const b = level.bounds;
   const pad = 3000;
   const x0 = Math.floor((b[0] - pad) / 100) * 100;
   const y0 = Math.floor((b[1] - pad) / 100) * 100;
-  el('rect', { x: x0, y: y0, width: b[2] - x0 + pad, height: b[3] - y0 + pad, fill: 'url(#mmgrid)' }, g);
+  const x1 = Math.ceil((b[2] + pad) / 100) * 100;
+  const y1 = Math.ceil((b[3] + pad) / 100) * 100;
+  const d = { 'mm-minor': [], 'mm-mid': [], 'mm-major': [] };
+  const cls = (v) => (v % (MM * 10) === 0 ? 'mm-major' : v % (MM * 5) === 0 ? 'mm-mid' : 'mm-minor');
+  for (let x = x0; x <= x1; x += MM) d[cls(x)].push(`M${x} ${y0}V${y1}`);
+  for (let y = y0; y <= y1; y += MM) d[cls(y)].push(`M${x0} ${y}H${x1}`);
+  for (const k of ['mm-minor', 'mm-mid', 'mm-major']) el('path', { d: d[k].join(''), class: k }, g);
+}
+
+// Alle Koordinaten der Ebene auf ganze Millimeter runden (gleiche Werte → gleiche Ergebnisse,
+// dadurch bleiben aneinanderstoßende Wände aneinander)
+function alignToGrid() {
+  if (!confirm('Alle Räume, Korridore, Aufzüge, Zonen, Türen, Kameras, Schachtzugänge und Beschriftungen dieser Ebene auf ganze Millimeter des Rasters ausrichten? (Strg+Z macht es rückgängig)')) return;
+  snapshot();
+  const r = (v) => Math.round(v / MM) * MM;
+  const r4 = (a) => [r(a[0]), r(a[1]), r(a[2]), r(a[3]), ...a.slice(4)];
+  level.rooms.forEach((room) => { room.rects = room.rects.map(r4); });
+  level.corridors.forEach((c, i) => { level.corridors[i] = r4(c); });
+  level.lifts.forEach((l) => { l.rect = r4(l.rect); });
+  (level.labels || []).forEach((l) => { l.x = r(l.x); l.y = r(l.y); });
+  [...layer.doors, ...layer.cams, ...layer.shafts].forEach((o) => { o.x = r(o.x); o.y = r(o.y); });
+  layer.lines.forEach((l) => { l.x1 = r(l.x1); l.y1 = r(l.y1); l.x2 = r(l.x2); l.y2 = r(l.y2); });
+  Object.values(layer.labels).forEach((l) => { if (l.x != null) { l.x = r(l.x); l.y = r(l.y); } });
+  Object.values(layer.rooms).forEach((d) => { if (d.idPos) d.idPos = { x: r(d.idPos.x), y: r(d.idPos.y) }; });
+  commit();
+  renderProps();
+  toast('EBENE AM MILLIMETERRASTER AUSGERICHTET');
 }
 
 // Anfasser zum Ändern der Größe (Raum-Teilflächen, Korridor)
@@ -356,6 +376,7 @@ function renderProps() {
       <div class="ed-btns"><button data-act="map-new">+ NEUE KARTE</button><button data-act="map-copy">KOPIEREN</button><button class="danger" data-act="map-del" ${plans.maps.length < 2 ? 'disabled' : ''}>LÖSCHEN</button></div>
       <h3 class="ed-h3">EBENE</h3>
       <label class="ed-field">NAME DER EBENE <input type="text" data-lvl="name" maxlength="40" value="${esc(level.name)}"></label>
+      <div class="ed-btns"><button data-act="lvl-align" title="Alle Koordinaten dieser Ebene auf ganze Millimeter runden">AM RASTER AUSRICHTEN</button></div>
       <div class="ed-btns"><button data-act="lvl-new">+ NEUE EBENE</button><button data-act="lvl-up" ${cur.li === 0 ? 'disabled' : ''}>↑</button><button data-act="lvl-down" ${cur.li >= MAP.levels.length - 1 ? 'disabled' : ''}>↓</button><button class="danger" data-act="lvl-del" ${MAP.levels.length < 2 ? 'disabled' : ''}>LÖSCHEN</button></div>
       <div class="ed-row"><span class="dim">RÄUME</span><span>${level.rooms.length}</span></div>
       <div class="ed-row"><span class="dim">KORRIDORE</span><span>${level.corridors.length}</span></div>
@@ -652,6 +673,7 @@ function bindMapProps() {
     switchLevel(cur.mi, j);
   };
   act('lvl-up', () => move(-1));
+  act('lvl-align', alignToGrid);
   act('lvl-down', () => move(1));
   act('lvl-del', () => {
     if (!confirm(`Ebene „${level.name}“ löschen? Das kann nicht rückgängig gemacht werden.`)) return;

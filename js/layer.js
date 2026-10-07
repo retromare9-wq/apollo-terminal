@@ -168,7 +168,16 @@ export function drawLayer(g, level, layer, { cams = true, editor = false } = {})
   const nodes = {};
   const defs = el('defs', {}, g);
 
-  const lineLayer = el('g', { class: 'ly-lines' }, g);
+  // Zonen liegen unter den Rahmen von Räumen und Korridoren: Maske blendet sie dort aus.
+  // Korridore: Rahmen schwarz, Innenfläche wieder weiß (innere Kanten an Kreuzungen sind unsichtbar)
+  const mid = `zonemask-${++clipSeq}`;
+  const mask = el('mask', { id: mid, maskUnits: 'userSpaceOnUse', x: -100000, y: -100000, width: 200000, height: 200000 }, defs);
+  el('rect', { x: -100000, y: -100000, width: 200000, height: 200000, fill: '#fff' }, mask);
+  const box = (r, attrs) => el('rect', { x: r[0], y: r[1], width: r[2] - r[0], height: r[3] - r[1], ...attrs }, mask);
+  level.corridors.forEach((c) => box(c, { fill: 'none', stroke: '#000', 'stroke-width': 3.4 }));
+  level.corridors.forEach((c) => box(c, { fill: '#fff' }));
+  level.rooms.forEach((room) => room.rects.forEach((rc) => box(rc, { fill: 'none', stroke: '#000', 'stroke-width': 2.6 })));
+  const lineLayer = el('g', { class: 'ly-lines', mask: `url(#${mid})` }, g);
   // Zonen: gerade Linie oder Kasten (box: x1/y1 und x2/y2 sind gegenüberliegende Ecken)
   layer.lines.forEach((l) => {
     const attrs = (cls) => (l.box

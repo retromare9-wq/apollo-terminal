@@ -78,7 +78,9 @@ Im Reiter STATION oben links **KARTE / EBENE** wählen. Mit Esc (nichts ausgewä
 das Kartenfenster: Karte umbenennen, **IM TERMINAL ANZEIGEN** an/aus, neue Karte, Kopie, Ebenen
 anlegen, sortieren und löschen, Korridorbreiten einstellen.
 
-Raster wie Millimeterpapier: 1 Kästchen = 1 mm = 0,5 m, dicke Linie = 1 cm = 5 m.
+Raster wie Millimeterpapier: 1 Kästchen = 1 mm = 0,5 m, dicke Linie = 1 cm = 5 m. Alles rastet auf ganze Millimeter ein;
+**AM RASTER AUSRICHTEN** (Kartenfenster) rundet ältere Teile einer Ebene auf das Raster. Zonenlinien liegen unter
+den Rahmen von Räumen und Korridoren.
 
 | Taste | Grundriss |
 |---|---|
