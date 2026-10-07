@@ -336,6 +336,7 @@ body.crt .crt-overlay::after {
 .ly-line.box, .ly-hit.box { fill: none; }
 .ly-hit.box { pointer-events: stroke; }
 .ly-shaft { fill: #1d3fd6; stroke: #7a95ff; stroke-width: 1.5; }
+.ly-shaft.off { fill: rgba(29, 63, 214, .25); stroke-dasharray: 3 2; }
 .ly-cone { pointer-events: none; stroke: rgba(108, 196, 149, .55); stroke-width: 1; stroke-dasharray: 3 3; }
 .ly-camdot { fill: var(--mint); stroke: #0a0604; stroke-width: 1.5; }
 .ly-camdir { stroke: var(--mint); stroke-width: 2.5; stroke-linecap: round; }

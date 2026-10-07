@@ -425,9 +425,15 @@ function renderProps() {
       <h3>SCHACHTZUGANG</h3>
       <div class="ed-row"><span class="dim">RAUM</span><span>${room ? esc(roomName(level, room, layer)) : '– (AUSSERHALB) –'}</span></div>
       <label class="ed-field">SCHACHT-ID <input type="text" data-sk="sid" maxlength="30" value="${esc(sh.sid)}" placeholder="${esc(def || 'SCHACHT')}"></label>
+      <label class="ed-check ed-big"><input type="checkbox" data-shvis ${sh.hidden ? '' : 'checked'}> AUF DER TERMINAL-KARTE ANZEIGEN</label>
       <label class="ed-field">NOTIZ <textarea data-sk="note" maxlength="1000">${esc(sh.note)}</textarea></label>
       <div class="ed-btns"><button class="danger" data-del>SCHACHTZUGANG LÖSCHEN</button></div>
-      <p class="ed-note">Ohne eigene Schacht-ID gilt die ID des Raums. Mit dem Auswahl-Werkzeug ziehen = verschieben.</p>`;
+      <p class="ed-note">Ohne eigene Schacht-ID gilt die ID des Raums. Ausgeblendete Zugänge erscheinen im Editor blass gestrichelt. Mit dem Auswahl-Werkzeug ziehen = verschieben.</p>`;
+    props.querySelector('[data-shvis]').addEventListener('change', (e) => {
+      snapshot();
+      if (e.target.checked) delete sh.hidden; else sh.hidden = true;
+      commit();
+    });
     props.querySelectorAll('[data-sk]').forEach((inp) => {
       inp.addEventListener('focus', snapshot);
       inp.addEventListener('input', () => { if (inp.value.trim()) sh[inp.dataset.sk] = inp.value; else delete sh[inp.dataset.sk]; commit(); });
@@ -1633,7 +1639,7 @@ function roomListBlocks() {
     blocks.push({ kv: ['Cluttered', e.d.cluttered ? 'Ja' : 'Nein'] });
     blocks.push({ kv: ['Status', STATUS[e.d.status || '']] });
     const shafts = roomShafts(layer, e.room);
-    if (shafts.length) blocks.push({ kv: ['Schachtzugänge', shafts.map((x) => `${x.sid || e.code}${x.note ? ` (${x.note})` : ''}`).join('; ')] });
+    if (shafts.length) blocks.push({ kv: ['Schachtzugänge', shafts.map((x) => `${x.sid || e.code}${x.hidden ? ' [nicht im Terminal]' : ''}${x.note ? ` (${x.note})` : ''}`).join('; ')] });
     blocks.push({ kv: ['Türen', e.doors] });
     blocks.push({ kv: ['Kameras', String(e.cams)] });
     blocks.push({ kv: ['Piktogramme', e.d.picto?.length ? e.d.picto.map((p) => `${semioticById(p.id)?.name}${p.map ? ' (auf der Karte)' : ''}`).join(', ') : '–'] });

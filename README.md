@@ -112,7 +112,7 @@ und Notiz eintragen.
 | 5 | Tür (in einen Gang oder an eine Raumwand klicken) |
 | 6 | Aufzug |
 | 7 | Kamera (gelben Punkt ziehen = Richtung und Reichweite) |
-| 8 | Schachtzugang |
+| 8 | Schachtzugang (Häkchen „AUF DER TERMINAL-KARTE ANZEIGEN“ je Zugang) |
 | G / O / R | Sicherheitsstufe (auch für die gewählte Tür) |
 | Entf · Strg+Z · Strg+Y | Löschen · Rückgängig · Wiederholen |
 
