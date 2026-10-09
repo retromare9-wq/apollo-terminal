@@ -199,3 +199,5 @@ svg.z-mid .mm-minor { stroke: transparent; }
 .editor .ly-shaft { cursor: pointer; }
 
 .editor button.ed-remind { border-color: var(--red); color: var(--ink); background: var(--red); animation: blink 1.6s steps(1) infinite; }
+
+.ed-liftcopy select { flex: 1; min-width: 0; background: #120905; color: var(--amber); border: 2px solid var(--amber-dim); font: 700 12px var(--font); padding: 5px; }

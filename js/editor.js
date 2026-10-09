@@ -265,6 +265,31 @@ function drawGrid(g) {
 
 // Alle Koordinaten der Ebene auf ganze Millimeter runden (gleiche Werte → gleiche Ergebnisse,
 // dadurch bleiben aneinanderstoßende Wände aneinander)
+// Aufzüge einer anderen Ebene an genau derselben Stelle übernehmen (gleiche Buchstaben/IDs).
+// Beide Ebenen werden beim jeweiligen Aufzug als erreichbar eingetragen.
+function copyLiftsFrom(srcId) {
+  const src = MAP.levels.find((lv) => lv.id === srcId);
+  if (!src) return;
+  const srcLayer = loadLayer(src.id, LAYER_FALLBACK[src.id]);
+  const have = new Set(level.lifts.map((l) => l.id));
+  const todo = src.plan.lifts.filter((l) => !have.has(l.id));
+  if (!todo.length) { toast('ALLE AUFZÜGE SIND SCHON DA'); return; }
+  snapshot();
+  for (const l of todo) {
+    level.lifts.push(JSON.parse(JSON.stringify(l)));
+    const info = JSON.parse(JSON.stringify(srcLayer.lifts[l.id] || {}));
+    info.levels = [...new Set([...(info.levels || []).filter((x) => x !== LV.id), src.id])];
+    layer.lifts[l.id] = info;
+    const back = srcLayer.lifts[l.id] || {};
+    back.levels = [...new Set([...(back.levels || []), LV.id])];
+    srcLayer.lifts[l.id] = back;
+  }
+  saveLayer(src.id, srcLayer);
+  commit();
+  renderProps();
+  toast(`${todo.length} AUFZÜGE VON ${src.plan.name} ÜBERNOMMEN`);
+}
+
 function alignToGrid() {
   if (!confirm('Alle Räume, Korridore, Aufzüge, Zonen, Türen, Kameras, Schachtzugänge und Beschriftungen dieser Ebene auf ganze Millimeter des Rasters ausrichten? (Strg+Z macht es rückgängig)')) return;
   snapshot();
@@ -380,6 +405,7 @@ function renderProps() {
       <h3 class="ed-h3">EBENE</h3>
       <label class="ed-field">NAME DER EBENE <input type="text" data-lvl="name" maxlength="40" value="${esc(level.name)}"></label>
       <div class="ed-btns"><button data-act="lvl-align" title="Alle Koordinaten dieser Ebene auf ganze Millimeter runden">AM RASTER AUSRICHTEN</button></div>
+      ${MAP.levels.length > 1 ? `<div class="ed-crow ed-liftcopy"><select data-liftsrc>${MAP.levels.filter((lv) => lv.id !== LV.id).map((lv) => `<option value="${esc(lv.id)}">${esc(lv.plan.name)} (${lv.plan.lifts.length})</option>`).join('')}</select><button data-act="lift-copy" title="Alle Aufzüge der gewählten Ebene an genau derselben Stelle auf diese Ebene übernehmen">AUFZÜGE ÜBERNEHMEN</button></div>` : ''}
       <div class="ed-btns"><button data-act="lvl-new">+ NEUE EBENE</button><button data-act="lvl-up" ${cur.li === 0 ? 'disabled' : ''}>↑</button><button data-act="lvl-down" ${cur.li >= MAP.levels.length - 1 ? 'disabled' : ''}>↓</button><button class="danger" data-act="lvl-del" ${MAP.levels.length < 2 ? 'disabled' : ''}>LÖSCHEN</button></div>
       <div class="ed-row"><span class="dim">RÄUME</span><span>${level.rooms.length}</span></div>
       <div class="ed-row"><span class="dim">KORRIDORE</span><span>${level.corridors.length}</span></div>
@@ -665,9 +691,11 @@ function bindMapProps() {
   act('lvl-new', () => {
     const name = prompt('Name der neuen Ebene:', `LEVEL -${MAP.levels.length}`);
     if (!name) return;
+    const src = LV;
     MAP.levels.push({ id: uid('l'), plan: emptyPlan(name.toUpperCase()) });
     plansChanged();
     switchLevel(cur.mi, MAP.levels.length - 1);
+    if (src.plan.lifts.length && confirm(`Die ${src.plan.lifts.length} Aufzüge von ${src.plan.name} an derselben Stelle übernehmen?`)) copyLiftsFrom(src.id);
   });
   const move = (dir) => {
     const j = cur.li + dir;
@@ -677,6 +705,7 @@ function bindMapProps() {
   };
   act('lvl-up', () => move(-1));
   act('lvl-align', alignToGrid);
+  act('lift-copy', () => copyLiftsFrom(props.querySelector('[data-liftsrc]').value));
   act('lvl-down', () => move(1));
   act('lvl-del', () => {
     if (!confirm(`Ebene „${level.name}“ löschen? Das kann nicht rückgängig gemacht werden.`)) return;
@@ -1556,11 +1585,11 @@ function pasteItem(c, dx, dy) {
   return null;
 }
 
-function pasteClip() {
+function pasteClip(inPlace = false) {
   const c = st.clip;
   if (!c) return;
-  // Ziel: obere linke Ecke der Kopie an die Mausposition, sonst leicht versetzt
-  const at = st.mouse ? snapP(st.mouse) : { x: c.box[0] + 50, y: c.box[1] + 50 };
+  // Ziel: obere linke Ecke der Kopie an die Mausposition (Strg+Umschalt+V: genau an der Originalstelle)
+  const at = inPlace ? { x: c.box[0], y: c.box[1] } : st.mouse ? snapP(st.mouse) : { x: c.box[0] + 50, y: c.box[1] + 50 };
   const dx = at.x - c.box[0];
   const dy = at.y - c.box[1];
   snapshot();
@@ -1925,7 +1954,7 @@ function init() {
     if ((e.ctrlKey || e.metaKey) && k === 'z') { e.preventDefault(); if (e.shiftKey) redo(); else undo(); return; }
     if ((e.ctrlKey || e.metaKey) && k === 'y') { e.preventDefault(); redo(); return; }
     if ((e.ctrlKey || e.metaKey) && k === 'c') { e.preventDefault(); copySel(); return; }
-    if ((e.ctrlKey || e.metaKey) && k === 'v') { e.preventDefault(); pasteClip(); return; }
+    if ((e.ctrlKey || e.metaKey) && k === 'v') { e.preventDefault(); pasteClip(e.shiftKey); return; }
     if (e.ctrlKey || e.metaKey || e.altKey) return;
     const t = TOOLS.find((x) => x.key === k);
     if (t) { setTool(t.id); return; }

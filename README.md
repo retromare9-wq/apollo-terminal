@@ -76,7 +76,8 @@ sichert Karte, Ausrüstung und Texte in einer Datei.
 
 Im Reiter STATION oben links **KARTE / EBENE** wählen. Mit Esc (nichts ausgewählt) erscheint rechts
 das Kartenfenster: Karte umbenennen, **IM TERMINAL ANZEIGEN** an/aus, neue Karte, Kopie, Ebenen
-anlegen, sortieren und löschen, Korridorbreiten einstellen.
+anlegen, sortieren und löschen, Korridorbreiten einstellen. **AUFZÜGE ÜBERNEHMEN** kopiert alle Aufzüge einer
+anderen Ebene an genau dieselbe Stelle und verbindet die Ebenen in beiden Richtungen.
 
 Raster wie Millimeterpapier: 1 Kästchen = 1 mm = 0,5 m, dicke Linie = 1 cm = 5 m. Alles rastet auf ganze Millimeter ein;
 **AM RASTER AUSRICHTEN** (Kartenfenster) rundet ältere Teile einer Ebene auf das Raster. Zonenlinien liegen unter
@@ -89,7 +90,7 @@ den Rahmen von Räumen und Korridoren.
 | A | Zonen: Linie (rastet auf jeden mm ein, Endpunkte ziehbar) oder Kasten (wie Räume, Ecken ziehbar) |
 | Q | Raum zeichnen (Rechteck aufziehen in 5-mm-Schritten, mit Strg in 1-mm-Schritten; „+ TEILFLÄCHE“ baut an einen Raum an) |
 | W / E | Korridor schmal (1,5 m) / breit (2,5 m): Strecke ziehen, feste Breite; mit Strg frei in 1-mm-Schritten |
-| Strg+C / Strg+V | Gewähltes Objekt kopieren / an der Mausposition einfügen |
+| Strg+C / Strg+V | Gewähltes Objekt kopieren / an der Mausposition einfügen (Strg+Umschalt+V: an derselben Stelle, z. B. auf einer anderen Ebene) |
 | Strg+Klick / Strg+Rahmen | Mehrere Objekte wählen (Rahmen: alles, was ganz darin liegt); gemeinsam verschieben, kopieren, löschen, Farben ändern |
 | 1 | Raum/Korridor/Aufzug anklicken, dann ziehen = verschieben, gelbe Ecken = Größe |
 
