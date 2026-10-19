@@ -5,6 +5,7 @@
 import { el, txt, rng } from './svg.js';
 import { drawStarmap, SOL } from './starmap.js';
 import { drawStationPlan, roomName, roomCode, roomZone, frame, applyZoom, liftData } from './stationplan.js';
+import { levelNum } from './plans.js';
 import { semioticSvg } from './semiotic.js';
 import { loadLayer, roomDoors, roomCams, roomShafts, SECURITY } from './layer.js';
 
@@ -177,7 +178,8 @@ export class MapView {
     this.token = 0;
     this.level = -1;
     this.animating = false;
-    this.stIdx = 0;
+    // Start im Stationsplan: Ebene 0 (Ausgangspunkt), sonst die erste
+    this.stIdx = Math.max(0, this.stationLevels.findIndex((l) => levelNum(l.plan.name) === 0));
     // Aufzug im Stationsplan anklicken: erreichbare Ebenen anzeigen
     this.svg.addEventListener('click', (e) => {
       const l = e.target.closest?.('[data-lift]');
@@ -206,10 +208,23 @@ export class MapView {
     return true;
   }
 
+  // dir +1 = eine Ebene höher, -1 = eine Ebene tiefer (innerhalb derselben Karte)
   stepLevel(dir) {
-    const n = this.stationLevels.length;
-    if (n < 2) return false;
-    return this.gotoLevel(Math.min(n - 1, Math.max(0, (this.stIdx || 0) + dir)));
+    const all = this.stationLevels;
+    const curLv = all[this.stIdx || 0];
+    if (!curLv) return false;
+    const same = all.map((l, i) => ({ l, i })).filter((x) => x.l.mapId === curLv.mapId);
+    const num = (x) => levelNum(x.l.plan.name);
+    let next;
+    if (same.every((x) => num(x) != null)) {
+      const n0 = num({ l: curLv });
+      const cand = same.filter((x) => (dir > 0 ? num(x) > n0 : num(x) < n0));
+      next = cand.sort((a, b) => (dir > 0 ? num(a) - num(b) : num(b) - num(a)))[0];
+    } else {
+      const k = same.findIndex((x) => x.i === (this.stIdx || 0));
+      next = same[k + dir];
+    }
+    return next ? this.gotoLevel(next.i) : false;
   }
 
   // Aufzug anhand des Buchstabens finden

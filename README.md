@@ -97,7 +97,8 @@ den Rahmen von Räumen und Korridoren.
 Räume und Korridore bekommen eigene Farben für Fläche und Rahmen. Wo Korridor- und Raumrahmen
 aufeinanderliegen, ist der Raumrahmen zu sehen.
 
-Im Terminal wechselt **Strg + „+“ / Strg + „−“** (oder Bild↑/↓) die Ebene; ein Klick auf einen
+Ebenen mit Nummer im Namen werden automatisch aufsteigend sortiert (-1, 0, 1, 2 …). Im Terminal startet der
+Stationsplan auf Ebene 0; **Strg + „+“** (Bild↑) geht eine Ebene höher, **Strg + „−“** (Bild↓) eine tiefer; ein Klick auf einen
 Aufzug – oder sein Buchstabe + Enter – zeigt die erreichbaren Ebenen, eine Ziffer wählt sie.
 
 ### Stationsplan

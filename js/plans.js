@@ -52,9 +52,22 @@ function normPlan(p, name) {
   return out;
 }
 
+// Ebenennummer aus dem Namen („LEVEL -1“ → -1), sonst null
+export function levelNum(name) {
+  const m = String(name ?? '').match(/-?\d+/);
+  return m ? Number(m[0]) : null;
+}
+
+// Ebenen aufsteigend nach Nummer sortieren (-1, 0, 1, 2 …), wenn alle eine Nummer haben
+export function sortLevels(levels) {
+  if (!levels.every((l) => levelNum(l.plan?.name) != null)) return false;
+  levels.sort((a, b) => levelNum(a.plan.name) - levelNum(b.plan.name));
+  return true;
+}
+
 export function normPlans(data) {
   const maps = Array.isArray(data?.maps) && data.maps.length ? data.maps : defaultPlans().maps;
-  return {
+  const out = {
     maps: maps.map((m) => ({
       id: m.id || uid('m'),
       name: m.name || 'KARTE',
@@ -65,6 +78,8 @@ export function normPlans(data) {
         .map((l) => ({ id: l.id || uid('l'), plan: normPlan(l.plan, l.plan?.name) })),
     })),
   };
+  out.maps.forEach((m) => sortLevels(m.levels));
+  return out;
 }
 
 export function loadPlans() {

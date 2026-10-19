@@ -11,7 +11,7 @@ import { equipmentList, equipmentCategories, saveItem, deleteItem, exportEquipme
 import { makeOdt } from './odt.js';
 import { loadContent, currentContent, saveContent } from './content.js';
 import { createContentEditor, CONTENT_TABS } from './content-editor.js';
-import { loadPlans, savePlans, normPlans, PLANS_KEY, asLevel, emptyPlan, SNAP, MM, LAYER_FALLBACK } from './plans.js';
+import { loadPlans, savePlans, normPlans, PLANS_KEY, asLevel, emptyPlan, SNAP, MM, LAYER_FALLBACK, sortLevels, levelNum } from './plans.js';
 
 loadContent();
 
@@ -406,12 +406,12 @@ function renderProps() {
       <label class="ed-field">NAME DER EBENE <input type="text" data-lvl="name" maxlength="40" value="${esc(level.name)}"></label>
       <div class="ed-btns"><button data-act="lvl-align" title="Alle Koordinaten dieser Ebene auf ganze Millimeter runden">AM RASTER AUSRICHTEN</button></div>
       ${MAP.levels.length > 1 ? `<div class="ed-crow ed-liftcopy"><select data-liftsrc>${MAP.levels.filter((lv) => lv.id !== LV.id).map((lv) => `<option value="${esc(lv.id)}">${esc(lv.plan.name)} (${lv.plan.lifts.length})</option>`).join('')}</select><button data-act="lift-copy" title="Alle Aufzüge der gewählten Ebene an genau derselben Stelle auf diese Ebene übernehmen">AUFZÜGE ÜBERNEHMEN</button></div>` : ''}
-      <div class="ed-btns"><button data-act="lvl-new">+ NEUE EBENE</button><button data-act="lvl-up" ${cur.li === 0 ? 'disabled' : ''}>↑</button><button data-act="lvl-down" ${cur.li >= MAP.levels.length - 1 ? 'disabled' : ''}>↓</button><button class="danger" data-act="lvl-del" ${MAP.levels.length < 2 ? 'disabled' : ''}>LÖSCHEN</button></div>
+      <div class="ed-btns"><button data-act="lvl-new">+ NEUE EBENE</button>${MAP.levels.every((lv) => levelNum(lv.plan.name) != null) ? '' : `<button data-act="lvl-up" ${cur.li === 0 ? 'disabled' : ''}>↑</button><button data-act="lvl-down" ${cur.li >= MAP.levels.length - 1 ? 'disabled' : ''}>↓</button>`}<button class="danger" data-act="lvl-del" ${MAP.levels.length < 2 ? 'disabled' : ''}>LÖSCHEN</button></div>
       <div class="ed-row"><span class="dim">RÄUME</span><span>${level.rooms.length}</span></div>
       <div class="ed-row"><span class="dim">KORRIDORE</span><span>${level.corridors.length}</span></div>
       <div class="ed-row"><span class="dim">AUFZÜGE</span><span>${level.lifts.length}</span></div>
       <div class="ed-row"><span class="dim">TÜREN · KAMERAS</span><span>${layer.doors.length} · ${layer.cams.length}</span></div>
-      <p class="ed-note"><b>Raster:</b> 1 Kästchen = 1 mm = 0,5 m · dicke Linie = 1 cm = 5 m. Im Terminal wechselt Strg + „+“ / Strg + „−“ die Ebene; Reihenfolge wie hier (↑ ↓).</p>
+      <p class="ed-note"><b>Raster:</b> 1 Kästchen = 1 mm = 0,5 m · dicke Linie = 1 cm = 5 m. Ebenen mit Nummer im Namen (LEVEL -1, LEVEL 0, LEVEL 1 …) werden automatisch aufsteigend sortiert. Im Terminal geht Strg + „+“ eine Ebene höher, Strg + „−“ eine tiefer.</p>
       <p class="ed-note">${esc(t.hint)}</p>
       <p class="ed-note"><b>Sicherheitsstufen</b><br>
         <span class="sec-t sec-green">GRÜN</span> – offen für alle<br>
@@ -646,6 +646,15 @@ function renderLevelPick() {
   $('#ed-sub').textContent = `// ${MAP.name} · ${level.name}`;
 }
 
+// Nach Umbenennen/Anlegen: nach Nummer sortieren, aktuelle Ebene bleibt gewählt
+function resortLevels() {
+  const id = LV.id;
+  if (!sortLevels(MAP.levels)) return;
+  cur.li = MAP.levels.findIndex((lv) => lv.id === id);
+  try { sessionStorage.setItem('apollo.editor.level', JSON.stringify(cur)); } catch { /* egal */ }
+  plansChanged();
+}
+
 const plansChanged = () => { if (!savePlans(plans)) toast('ACHTUNG: SPEICHERN IM BROWSER FEHLGESCHLAGEN – BITTE SOFORT EXPORTIEREN'); renderLevelPick(); };
 
 function copyLayer(fromId, toId) {
@@ -661,7 +670,9 @@ function bindMapProps() {
     plansChanged();
     renderProps();
   }));
-  props.querySelector('[data-lvl="name"]').addEventListener('input', (e) => { LV.plan.name = e.target.value.toUpperCase() || 'EBENE'; level = asLevel(MAP, LV); plansChanged(); render(); });
+  const nameInp = props.querySelector('[data-lvl="name"]');
+  nameInp.addEventListener('input', (e) => { LV.plan.name = e.target.value.toUpperCase() || 'EBENE'; level = asLevel(MAP, LV); plansChanged(); render(); });
+  nameInp.addEventListener('change', () => { resortLevels(); renderProps(); });
   const act = (k, fn) => props.querySelector(`[data-act="${k}"]`)?.addEventListener('click', fn);
   act('map-new', () => {
     const name = prompt('Name der neuen Karte:', 'NEUE KARTE');
@@ -692,9 +703,11 @@ function bindMapProps() {
     const name = prompt('Name der neuen Ebene:', `LEVEL -${MAP.levels.length}`);
     if (!name) return;
     const src = LV;
-    MAP.levels.push({ id: uid('l'), plan: emptyPlan(name.toUpperCase()) });
+    const nl = { id: uid('l'), plan: emptyPlan(name.toUpperCase()) };
+    MAP.levels.push(nl);
+    sortLevels(MAP.levels);
     plansChanged();
-    switchLevel(cur.mi, MAP.levels.length - 1);
+    switchLevel(cur.mi, MAP.levels.indexOf(nl));
     if (src.plan.lifts.length && confirm(`Die ${src.plan.lifts.length} Aufzüge von ${src.plan.name} an derselben Stelle übernehmen?`)) copyLiftsFrom(src.id);
   });
   const move = (dir) => {

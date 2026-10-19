@@ -993,7 +993,7 @@ function onKey(e) {
   if (onPlan && state.map.info?.plan && ((e.ctrlKey && ['+', '-', '=', 'Add', 'Subtract'].includes(e.key)) || e.key === 'PageUp' || e.key === 'PageDown')) {
     e.preventDefault();
     const up = e.key === '+' || e.key === '=' || e.key === 'Add' || e.key === 'PageUp';
-    if (!state.map.stepLevel(up ? -1 : 1)) sound.error();
+    if (!state.map.stepLevel(up ? 1 : -1)) sound.error();
     return;
   }
   if (onPlan && e.ctrlKey && e.key.startsWith('Arrow')) {
