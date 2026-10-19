@@ -7,8 +7,26 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="css/apollo.css">
-  <link rel="stylesheet" href="css/editor.css">
+  <link rel="stylesheet" href="css/apollo.css?v=5471b05fb5">
+  <link rel="stylesheet" href="css/editor.css?v=5471b05fb5">
+  <script>
+    // Startwächter: Lädt der Code nicht (z. B. alte Dateien im Browser-Cache), Hinweis statt leerer Seite
+    (function () {
+      var shown = false;
+      function show(msg) {
+        if (shown || window.__apolloReady) return;
+        shown = true;
+        var d = document.createElement('div');
+        d.style.cssText = 'position:fixed;inset:0;z-index:9999;background:#0a0604;color:#d4702c;font:16px/1.6 monospace;display:flex;align-items:center;justify-content:center;padding:40px;text-align:center';
+        d.innerHTML = '<div><b style="color:#e3cb5c;font-size:20px">A.P.O.L.L.O. KONNTE NICHT STARTEN</b><br><br>Bitte die Seite neu laden mit <b>Strg + Umschalt + R</b> (Mac: Cmd + Shift + R).<br>Deine gespeicherten Daten bleiben erhalten.<br><br><span style="color:#8a4320;font-size:12px">' + String(msg || '').replace(/[<>&]/g, '') + '</span></div>';
+        document.body.appendChild(d);
+      }
+      addEventListener('error', function (e) { show(e.message); });
+      addEventListener('unhandledrejection', function (e) { show(e.reason && e.reason.message); });
+      addEventListener('load', function () { setTimeout(function () { show('Startzeit überschritten'); }, 6000); });
+    })();
+  </script>
+      <script type="importmap" id="apollo-version">{"imports":{"./js/app.js":"./js/app.js?v=5471b05fb5","./js/boot.js":"./js/boot.js?v=5471b05fb5","./js/content-editor.js":"./js/content-editor.js?v=5471b05fb5","./js/content.js":"./js/content.js?v=5471b05fb5","./js/data.js":"./js/data.js?v=5471b05fb5","./js/editor.js":"./js/editor.js?v=5471b05fb5","./js/equipment-data.js":"./js/equipment-data.js?v=5471b05fb5","./js/equipment.js":"./js/equipment.js?v=5471b05fb5","./js/layer.js":"./js/layer.js?v=5471b05fb5","./js/logo.js":"./js/logo.js?v=5471b05fb5","./js/maps.js":"./js/maps.js?v=5471b05fb5","./js/matcher.js":"./js/matcher.js?v=5471b05fb5","./js/odt.js":"./js/odt.js?v=5471b05fb5","./js/plans.js":"./js/plans.js?v=5471b05fb5","./js/semiotic.js":"./js/semiotic.js?v=5471b05fb5","./js/sound.js":"./js/sound.js?v=5471b05fb5","./js/starmap-data.js":"./js/starmap-data.js?v=5471b05fb5","./js/starmap.js":"./js/starmap.js?v=5471b05fb5","./js/station-layer0.js":"./js/station-layer0.js?v=5471b05fb5","./js/station-level0.js":"./js/station-level0.js?v=5471b05fb5","./js/stationplan.js":"./js/stationplan.js?v=5471b05fb5","./js/svg.js":"./js/svg.js?v=5471b05fb5"}}</script>
 </head>
 <body class="editor">
   <header class="ed-top">
@@ -62,6 +80,6 @@
   <section id="content" class="ed-content" hidden></section>
   <footer class="ed-status" id="tabs"></footer>
 
-  <script type="module" src="js/editor.js"></script>
+  <script type="module" src="js/editor.js?v=5471b05fb5"></script>
 </body>
 </html>

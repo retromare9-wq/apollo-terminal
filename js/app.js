@@ -1084,4 +1084,5 @@ async function main() {
   state.ready = true;
 }
 
+window.__apolloReady = true;
 main();

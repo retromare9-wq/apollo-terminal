@@ -155,6 +155,13 @@ Browserdaten löschen, privates Fenster oder ein anderer Browser/PC bedeuten: Da
 Darum regelmäßig **EXPORTIEREN** (Datei mit Datum im Namen). Der Knopf blinkt rot, wenn seit
 20 Minuten nicht exportierte Änderungen vorliegen. Wiederherstellen mit **IMPORTIEREN**.
 
+## Updates und Browser-Cache
+
+Alle Module werden mit einer Versionsnummer geladen (Import-Map in `index.html`/`editor.html`).
+Nach Code-Änderungen vor dem Commit `python3 tools/stamp.py` ausführen – dann lädt der Browser
+garantiert alle neuen Dateien zusammen. Startet die Seite trotzdem nicht, erscheint ein Hinweis
+(Strg + Umschalt + R).
+
 ## Lokal starten
 
 ```sh

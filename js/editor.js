@@ -2001,3 +2001,4 @@ function init() {
 }
 
 init();
+window.__apolloReady = true;
