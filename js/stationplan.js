@@ -93,7 +93,10 @@ export function drawStationPlan(g, cfg, level, layer, opts = {}) {
   const statusOf = (id) => layer.rooms[id]?.status || '';
 
   // Farben aus dem Editor über CSS-Variablen, damit Statusfarben (Schaden usw.) Vorrang behalten
-  const colors = (fill, stroke, f, s) => [fill ? `${f}:${fill}` : '', stroke ? `${s}:${stroke}` : ''].filter(Boolean).join(';');
+  // Farbschema „phosphor“: eigene Farben werden ignoriert (bleiben aber gespeichert)
+  const phosphor = level.theme === 'phosphor';
+  g.classList.toggle('theme-phosphor', phosphor);
+  const colors = (fill, stroke, f, s) => (phosphor ? '' : [fill ? `${f}:${fill}` : '', stroke ? `${s}:${stroke}` : ''].filter(Boolean).join(';'));
 
   // Korridore vor den Räumen: wo sich Rahmen überlagern, ist der Raumrahmen zu sehen.
   // Erst alle Rahmen, dann alle Füllungen – so entstehen an Kreuzungen keine Nähte.

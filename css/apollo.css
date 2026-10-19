@@ -443,3 +443,12 @@ body.destruct .screen::after { content: ''; position: absolute; inset: 0; pointe
 .sp-go:hover { color: var(--yellow); }
 .sp-go.here { color: var(--mint); }
 .map .st-lift { cursor: pointer; }
+
+/* Farbschema Phosphorgrün für den Stationsplan (Türen, Aufzüge, Schachtzugänge bleiben) */
+.theme-phosphor { --ph-hi: #5dff8a; --ph: #2fd866; --ph-mid: #1c8a44; --ph-lo: #0f4a26; --ph-room: #041a0c; --ph-corr: #136a33; }
+.theme-phosphor .st-fill { fill: var(--ph-room); }
+.theme-phosphor .st-wall { stroke: var(--ph); }
+.theme-phosphor .st-corr { fill: var(--ph-corr); }
+.theme-phosphor .st-corr-edge { fill: #23a352; stroke: #23a352; }
+.theme-phosphor .st-zone, .theme-phosphor .st-level, .theme-phosphor .st-row, .theme-phosphor .st-rid, .theme-phosphor .st-name, .theme-phosphor .st-num { fill: var(--ph-hi); }
+.theme-phosphor .ly-line { stroke: var(--ph-mid); }

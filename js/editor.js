@@ -397,6 +397,7 @@ function renderProps() {
       <h3>KARTE</h3>
       <label class="ed-field">NAME DER KARTE <input type="text" data-map="name" maxlength="40" value="${esc(MAP.name)}"></label>
       <label class="ed-check ed-big"><input type="checkbox" data-map="terminal" ${MAP.terminal ? 'checked' : ''}> IM TERMINAL ANZEIGEN</label>
+      <label class="ed-check ed-big" title="Alle Ebenen einheitlich phosphorgrün darstellen – deine eigenen Farben bleiben gespeichert und kommen beim Abschalten zurück"><input type="checkbox" data-map="theme" ${MAP.theme === 'phosphor' ? 'checked' : ''}> PHOSPHORGRÜN (EIGENE FARBEN AUSBLENDEN)</label>
       <div class="ed-crow">
         <label class="ed-field">KORRIDOR SCHMAL (M) <input type="text" data-mapw="narrow" value="${m(MAP.narrow)}"></label>
         <label class="ed-field">KORRIDOR BREIT (M) <input type="text" data-mapw="wide" value="${m(MAP.wide)}"></label>
@@ -664,6 +665,7 @@ function copyLayer(fromId, toId) {
 function bindMapProps() {
   props.querySelector('[data-map="name"]').addEventListener('input', (e) => { MAP.name = e.target.value.toUpperCase() || 'KARTE'; plansChanged(); });
   props.querySelector('[data-map="terminal"]').addEventListener('change', (e) => { MAP.terminal = e.target.checked; plansChanged(); });
+  props.querySelector('[data-map="theme"]').addEventListener('change', (e) => { MAP.theme = e.target.checked ? 'phosphor' : ''; level = asLevel(MAP, LV); plansChanged(); render(); });
   props.querySelectorAll('[data-mapw]').forEach((inp) => inp.addEventListener('change', () => {
     const v = Number(String(inp.value).replace(',', '.'));
     if (v > 0) MAP[inp.dataset.mapw] = Math.round(v * UNITS_PER_M);

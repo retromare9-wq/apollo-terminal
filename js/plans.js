@@ -72,6 +72,7 @@ export function normPlans(data) {
       id: m.id || uid('m'),
       name: m.name || 'KARTE',
       terminal: m.terminal !== false,
+      theme: m.theme || '',   // '' = eigene Farben, 'phosphor' = einheitlich phosphorgrün
       narrow: Number(m.narrow) && Number(m.narrow) !== 25 ? Number(m.narrow) : CORR_W.narrow,   // alte Vorgabe 1,25 m → 1,5 m
       wide: Number(m.wide) || CORR_W.wide,
       levels: (Array.isArray(m.levels) && m.levels.length ? m.levels : [{ id: uid('l'), plan: emptyPlan() }])
@@ -107,6 +108,7 @@ export function asLevel(map, lvl) {
   const plan = lvl.plan;
   plan.bounds = planBounds(plan);
   plan.mapName = map.name;
+  plan.theme = map.theme || '';
   return plan;
 }
 
