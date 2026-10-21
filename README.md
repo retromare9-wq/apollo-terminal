@@ -101,6 +101,17 @@ Ebenen mit Nummer im Namen werden automatisch aufsteigend sortiert (-1, 0, 1, 2 
 Stationsplan auf Ebene 0; **Strg + „+“** (Bild↑) geht eine Ebene höher, **Strg + „−“** (Bild↓) eine tiefer; ein Klick auf einen
 Aufzug – oder sein Buchstabe + Enter – zeigt die erreichbaren Ebenen, eine Ziffer wählt sie.
 
+### Raumliste (Abgleich mit der Handy-App)
+
+Die Raumbeschreibungen stammen aus der **Raumliste der Handy-App** (Projekt `Alien-RPG`, Reiter „Orte“) und werden über ein privates GitHub Gist abgeglichen:
+
+1. Zuerst in der Handy-App unter ⚙ Daten den Abgleich mit einem GitHub-Token (classic, nur Recht **gist**) einrichten.
+2. Im Editor oben **RAUMLISTE ☁** öffnen, denselben Token eintragen, **VERBINDEN** – die Liste wird geladen.
+
+Ein Raum auf der Karte wird über **Ebene + Raum-ID** mit seinem Eintrag gekoppelt (Quartiere ohne ID über ihre alte ID, z. B. `Za6`; gibt es eine ID auf der Ebene mehrfach, entscheidet der Bereich). Raum anklicken zeigt rechts den Eintrag, **BEARBEITEN ▸** öffnet das Fenster mit allen Feldern der Raumliste sowie Karte & Terminal (ID auf der Karte, Terminal-Name, Status, Notiz, Piktogramme). Ohne passenden Eintrag: **EINTRAG ANLEGEN** (übernimmt Türen, Schachtzugänge und Terminal aus der Karte) oder **MIT EINTRAG VERKNÜPFEN**. Der Stern markiert Kernorte.
+
+Änderungen gehen nach wenigen Sekunden aufs Handy; Änderungen vom Handy kommen spätestens nach 30 Sekunden. Je Feld gewinnt die neuere Änderung. Die Raumliste als ODT/PDF nimmt ihre Beschreibungen aus der Raumliste.
+
 ### Stationsplan
 
 `editor.html` – Türen (Sicherheitsstufe Grün / Orange / Rot), graue Zonen-Markierungen, Kameras mit

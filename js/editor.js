@@ -12,6 +12,11 @@ import { makeOdt } from './odt.js';
 import { loadContent, currentContent, saveContent } from './content.js';
 import { createContentEditor, CONTENT_TABS } from './content-editor.js';
 import { loadPlans, savePlans, normPlans, PLANS_KEY, asLevel, emptyPlan, SNAP, MM, LAYER_FALLBACK, sortLevels, levelNum } from './plans.js';
+import {
+  roomSync, roomListEntries, roomListEmpty, findEntry, updateEntry, addEntry, unlinkedEntries, mapLinkOf,
+  onRoomListChange, LIST_TEXT_FIELDS, TERMINAL_PICTO,
+} from './roomlist.js';
+import { syncSettings } from './sync.js';
 
 loadContent();
 
@@ -374,6 +379,137 @@ function ortho(a, b) {
 
 // ---------- Eigenschaften ----------
 
+// ---------- Raumliste (Handy-App) ----------
+
+const levelNo = () => levelNum(level.name);
+const entryFor = (room) => findEntry({ levelId: LV.id, levelNo: levelNo(), room, code: roomCode(room, layer), zone: roomZone(level, room, layer) });
+const titleCase = (t) => String(t || '').toLowerCase().replace(/(^|[\s\-/(])(\p{L})/gu, (_, a, b) => a + b.toUpperCase());
+
+// Werte, die die Karte selbst kennt
+function mapFacts(room) {
+  const d = layer.rooms[room.id] || {};
+  return {
+    doors: roomDoors(layer, room).length,
+    shafts: roomShafts(layer, room).length,
+    terminal: (d.picto || []).some((p) => p.id === TERMINAL_PICTO),
+  };
+}
+
+function createEntryFor(room) {
+  const d = layer.rooms[room.id] || {};
+  return addEntry({
+    area: titleCase(roomZone(level, room, layer)),
+    name: titleCase(roomName(level, room, layer)),
+    roomId: roomCode(room, layer),
+    level: levelNo() == null ? '' : String(levelNo()),
+    cluttered: d.cluttered === '' ? false : d.cluttered !== undefined ? !!d.cluttered : true,
+    ...mapFacts(room),
+    mapLink: mapLinkOf(LV.id, room),
+  });
+}
+
+function roomListCard(room) {
+  if (roomListEmpty()) {
+    return `<div class="rl-card rl-none"><p>RAUMLISTE NOCH NICHT GELADEN.</p>
+      <div class="ed-btns"><button data-rlsync>RAUMLISTE ☁ EINRICHTEN</button></div></div>`;
+  }
+  const e = entryFor(room);
+  if (!e) {
+    const linked = new Set(level.rooms.map(entryFor).filter(Boolean).map((x) => x.id));
+    const free = unlinkedEntries(levelNo(), linked);
+    return `<div class="rl-card rl-none"><p>KEIN EINTRAG IN DER RAUMLISTE</p>
+      <div class="ed-btns"><button data-rlnew>EINTRAG ANLEGEN</button></div>
+      ${free.length ? `<label class="ed-field">ODER MIT EINTRAG VERKNÜPFEN <select data-rllink><option value="">– EINTRAG WÄHLEN –</option>${free.map((r) => `<option value="${esc(r.id)}">${esc([r.roomId || r.linkId, r.name].filter(Boolean).join(' · '))} (${esc(r.area || '–')})</option>`).join('')}</select></label>` : ''}</div>`;
+  }
+  const facts = [
+    e.roomId ? `<b>${esc(e.roomId)}</b>` : '',
+    e.level !== '' && e.level != null ? `LEVEL ${esc(e.level)}` : '',
+    e.cluttered ? 'CLUTTERED' : 'OPEN',
+    e.terminal ? 'TERMINAL' : '',
+    Number(e.shafts) ? `${e.shafts} ${Number(e.shafts) === 1 ? 'SCHACHTZUGANG' : 'SCHACHTZUGÄNGE'}` : '',
+    Number(e.doors) ? `${e.doors} TÜR${Number(e.doors) === 1 ? '' : 'EN'}` : '',
+  ].filter(Boolean).map((f) => `<span>${f}</span>`).join('');
+  const texts = LIST_TEXT_FIELDS.filter(([k]) => String(e[k] || '').trim())
+    .map(([k, label]) => `<div class="rl-f ${k === 'aesthetics' ? 'rl-aes' : ''}"><span class="dim">${label}</span><p>${esc(e[k]).replace(/\n/g, '<br>')}</p></div>`).join('');
+  return `<div class="rl-card">
+    <div class="rl-head">
+      <button class="rl-star ${e.core ? 'on' : ''}" data-rlstar title="${e.core ? 'Kein Kernort mehr' : 'Als Kernort markieren'}">${e.core ? '★' : '☆'}</button>
+      <div><div class="dim rl-path">${esc([e.area, e.subarea].filter(Boolean).join(' › '))}</div><div class="rl-name">${esc(e.name || '–')}</div></div>
+    </div>
+    <div class="rl-facts">${facts}</div>
+    ${texts || '<p class="dim">Noch keine Beschreibung.</p>'}
+    <div class="ed-btns"><button class="rl-primary" data-rledit>BEARBEITEN ▸</button></div>
+  </div>`;
+}
+
+// Karte rechts neu aufbauen, z. B. wenn sich die Raum-ID ändert
+function refreshRoomCard(room) {
+  const card = props.querySelector('.rl-card');
+  if (!card || st.sel?.id !== room.id) return;
+  card.outerHTML = roomListCard(room);
+  bindRoomListCard(props, room);
+}
+
+function bindRoomListCard(root, room) {
+  root.querySelector('.rl-card [data-rledit]')?.addEventListener('click', () => openDetail(room.id));
+  root.querySelector('[data-rlsync]')?.addEventListener('click', openRoomSync);
+  root.querySelector('[data-rlnew]')?.addEventListener('click', () => { createEntryFor(room); openDetail(room.id); });
+  root.querySelector('[data-rllink]')?.addEventListener('change', (ev) => {
+    if (!ev.target.value) return;
+    updateEntry(ev.target.value, { mapLink: mapLinkOf(LV.id, room) });
+    renderProps();
+  });
+  root.querySelector('[data-rlstar]')?.addEventListener('click', () => {
+    const e = entryFor(room);
+    if (e) updateEntry(e.id, { core: !e.core });
+    renderProps();
+  });
+}
+
+// Abgleich einrichten (Token wie in der Handy-App)
+const rlsync = $('#rlsync');
+function openRoomSync() { rlsync.hidden = false; renderRoomSync(); }
+function closeRoomSync() { rlsync.hidden = true; }
+function syncLabel(s = roomSync.status()) {
+  if (s.state === 'ok') return `SYNCHRON${s.lastSync ? ` · ${new Date(s.lastSync).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })}` : ''}`;
+  return String(s.message || '').toUpperCase();
+}
+function renderRoomSync() {
+  const { gistId } = syncSettings();
+  const s = roomSync.status();
+  rlsync.innerHTML = `
+    <div class="ed-dwin rl-win">
+      <header class="ed-dhead"><div><span class="dim">ABGLEICH MIT DER HANDY-APP</span><h2>RAUMLISTE</h2></div><button data-close>SCHLIESSEN ✕</button></header>
+      <div class="ed-dcol">
+        <p class="rl-state rl-${s.state}">${esc(syncLabel(s))}</p>
+        <div class="ed-row"><span class="dim">RÄUME IN DER LISTE</span><span>${roomListEntries().length}</span></div>
+        ${gistId ? `
+          <div class="ed-btns"><button data-now>JETZT ABGLEICHEN</button><button class="danger" data-off>TRENNEN</button></div>
+          <p class="ed-note">Änderungen hier werden nach wenigen Sekunden hochgeladen; Änderungen vom Handy kommen spätestens nach 30 Sekunden an.</p>`
+        : `
+          <p class="ed-note">Zuerst in der Handy-App unter ⚙ Daten den Abgleich einrichten. Danach hier <b>denselben GitHub-Token</b> eintragen – der Editor lädt dann die Raumliste vom Handy.</p>
+          <label class="ed-field">GITHUB-TOKEN <input type="text" id="rl-token" autocomplete="off" placeholder="ghp_…" style="-webkit-text-security: disc"></label>
+          <div class="ed-btns"><button data-connect>VERBINDEN</button></div>
+          <p class="ed-note">Der Token bleibt nur in diesem Browser gespeichert.</p>`}
+      </div>
+    </div>`;
+  rlsync.querySelector('[data-close]').addEventListener('click', closeRoomSync);
+  rlsync.querySelector('[data-now]')?.addEventListener('click', () => roomSync.syncNow());
+  rlsync.querySelector('[data-off]')?.addEventListener('click', () => {
+    if (confirm('Abgleich in diesem Browser beenden? Die Raumliste bleibt hier gespeichert.')) { roomSync.disconnect(); renderRoomSync(); }
+  });
+  rlsync.querySelector('[data-connect]')?.addEventListener('click', async () => {
+    try {
+      await roomSync.connect($('#rl-token').value);
+      toast(`RAUMLISTE GELADEN: ${roomListEntries().length} RÄUME`);
+    } catch (err) {
+      toast(String(err.message).toUpperCase());
+    }
+    renderRoomSync();
+    renderProps();
+  });
+}
+
 function renderProps() {
   if (st.multi.length > 1) {
     const names = { room: 'RÄUME', corr: 'KORRIDORE', lift: 'AUFZÜGE', door: 'TÜREN', cam: 'KAMERAS', line: 'ZONEN', label: 'BESCHRIFTUNGEN', shaft: 'SCHACHTZUGÄNGE' };
@@ -502,17 +638,18 @@ function renderProps() {
     const pics = data.picto || [];
     props.innerHTML = `
       <h3>${esc(roomName(level, room, layer))}</h3>
+      ${roomListCard(room)}
+      <h3 class="ed-h3">KARTE & TERMINAL</h3>
       <div class="ed-row"><span class="dim">TÜREN</span><span>${doors.length}</span></div>
       <div class="ed-row"><span class="dim">KAMERAS</span><span>${roomCams(layer, room).length}</span></div>
       <div class="ed-crow ed-idrow"><label class="ed-field">RAUM-ID <input type="text" data-k="code" maxlength="20" value="${esc(data.code)}" placeholder="${esc(room.id)}"></label><label class="ed-field ed-checkf" title="Raum-ID auf der Karte anzeigen (im Raum verschiebbar)"><input type="checkbox" data-showid ${data.showId ? 'checked' : ''}> AUF KARTE</label></div>
-      <label class="ed-field">NAME <input type="text" data-k="name" maxlength="40" value="${esc(data.name)}" placeholder="${esc(roomName(level, room, { rooms: {} }))}"></label>
-      <label class="ed-field">BEREICH <input type="text" data-k="zoneName" maxlength="40" value="${esc(data.zoneName)}" placeholder="${esc(level.zones[room.zone] || room.zone)}"></label>
-      <label class="ed-check ed-big"><input type="checkbox" data-kb="cluttered" ${data.cluttered ? 'checked' : ''}> CLUTTERED</label>
+      <label class="ed-field">NAME IM TERMINAL <input type="text" data-k="name" maxlength="40" value="${esc(data.name)}" placeholder="${esc(roomName(level, room, { rooms: {} }))}"></label>
+      <label class="ed-field">BEREICH IM TERMINAL <input type="text" data-k="zoneName" maxlength="40" value="${esc(data.zoneName)}" placeholder="${esc(level.zones[room.zone] || room.zone)}"></label>
       <label class="ed-field">STATUS <select data-k="status">${Object.entries(STATUS).map(([k, v]) => `<option value="${k}" ${(data.status || '') === k ? 'selected' : ''}>${v}</option>`).join('')}</select></label>
       <label class="ed-field">NOTIZ (ERSCHEINT IM TERMINAL) <textarea data-k="info" maxlength="300">${esc(data.info)}</textarea></label>
       <div class="ed-field">PIKTOGRAMME (${pics.length}/${MAX_PICTOS})</div>
       <div class="ed-pics">${pics.map((p) => `<span class="ed-pic ${p.map ? 'on-map' : ''}" title="${esc(semioticById(p.id)?.name)}${p.map ? ' · auf der Karte' : ''}">${semioticSvg(p.id, 34)}</span>`).join('') || '<span class="dim">KEINE</span>'}</div>
-      <div class="ed-btns"><button data-detail>RAUMBESCHREIBUNG ÖFFNEN ▸</button><button data-reset>ZURÜCKSETZEN</button></div>
+      <div class="ed-btns"><button data-detail>BEARBEITEN ▸</button><button data-reset>KARTENDATEN ZURÜCKSETZEN</button></div>
       <h3 class="ed-h3">GRUNDRISS</h3>
       ${colorRows(room.fill, room.stroke, DEF.room)}
       <div class="ed-btns"><button data-allcol="room">FARBEN FÜR ALLE RÄUME DER EBENE</button></div>
@@ -521,6 +658,7 @@ function renderProps() {
       <div class="ed-btns"><button data-append>${st.append === room.id ? 'JETZT RECHTECK AUFZIEHEN …' : '+ TEILFLÄCHE ANBAUEN'}</button><button class="danger" data-pdel>RAUM LÖSCHEN</button></div>
       <p class="ed-note">Gewählten Raum ziehen = verschieben (Türen, Kameras und Raum-ID wandern mit) · gelbe Ecken ziehen = Größe ändern in 5-mm-Schritten, mit Strg in 1-mm-Schritten · Strg+C / Strg+V kopiert.</p>`;
     bindRoomFields(props, room);
+    bindRoomListCard(props, room);
     bindColors(room, 'room');
     props.querySelector('[data-append]').addEventListener('click', () => { st.append = room.id; setTool('proom'); renderProps(); });
     props.querySelector('[data-pdel]').addEventListener('click', () => deletePlanItem(sel));
@@ -530,9 +668,9 @@ function renderProps() {
       commit();
       renderProps();
     }));
-    props.querySelector('[data-detail]').addEventListener('click', () => openDetail(room.id));
+    props.querySelectorAll('[data-detail]').forEach((b) => b.addEventListener('click', () => openDetail(room.id)));
     props.querySelector('[data-reset]').addEventListener('click', () => {
-      if (!confirm('Alle Angaben zu diesem Raum löschen?')) return;
+      if (!confirm('Kartendaten dieses Raums löschen (Raum-ID, Terminal-Name, Status, Notiz, Piktogramme)? Der Eintrag in der Raumliste bleibt.')) return;
       snapshot();
       delete layer.rooms[room.id];
       commit();
@@ -748,6 +886,7 @@ function bindRoomFields(root, room) {
     inp.addEventListener(inp.tagName === 'SELECT' ? 'change' : 'input', () => {
       patchRoom(room.id, { [inp.dataset.k]: inp.value.trim() ? inp.value : '' });
       commit();
+      if (inp.dataset.k === 'code' && root === props) refreshRoomCard(room);
       root.querySelectorAll('[data-title]').forEach((t) => { t.textContent = roomName(level, room, layer); });
       const h = props.querySelector('h3');
       if (h && st.sel?.id === room.id) h.textContent = roomName(level, room, layer);
@@ -982,30 +1121,46 @@ function closeDetail() {
 function renderDetail() {
   const room = roomById(detailRoom);
   if (!room) return;
+  // Beim Bearbeiten wird der Raum fest mit seinem Eintrag in der Raumliste verknüpft (oder einer angelegt).
+  let e = roomListEmpty() ? null : entryFor(room);
+  if (!roomListEmpty() && !e) e = createEntryFor(room);
+  if (e && e.mapLink !== mapLinkOf(LV.id, room)) e = updateEntry(e.id, { mapLink: mapLinkOf(LV.id, room) });
   const data = layer.rooms[room.id] || {};
-  const doors = roomDoors(layer, room);
   const pics = data.picto || [];
-  const items = data.items || [];
-  const field = (k, label, max = 3000) => `<label class="ed-field">${label}<textarea data-k="${k}" maxlength="${max}">${esc(data[k])}</textarea></label>`;
+  const facts = mapFacts(room);
+  const all = roomListEntries();
+  const opts = (k) => [...new Set(all.map((x) => x[k]).filter(Boolean))].sort().map((v) => `<option value="${esc(v)}">`).join('');
+  const inp = (k, label, attrs = '') => `<label class="ed-field">${label} <input type="text" data-rl="${k}" value="${esc(e[k])}" ${attrs}></label>`;
+  const chk = (k, label) => `<label class="ed-check ed-big"><input type="checkbox" data-rlb="${k}" ${e[k] ? 'checked' : ''}> ${label}</label>`;
+  const num = (k, label, map) => `<label class="ed-field">${label} <input type="text" inputmode="numeric" data-rln="${k}" value="${Number(e[k]) || 0}">${map !== Number(e[k] || 0) ? `<span class="dim rl-mapval">KARTE: ${map}</span>` : ''}</label>`;
+  const listCol = e ? `
+          <div class="ed-head">RAUMLISTE</div>
+          <datalist id="rl-areas">${opts('area')}</datalist><datalist id="rl-subareas">${opts('subarea')}</datalist>
+          <div class="ed-crow">${inp('area', 'OBERBEREICH', 'list="rl-areas"')}${inp('subarea', 'UNTERBEREICH', 'list="rl-subareas"')}</div>
+          ${inp('name', 'NAME DES RAUMS')}
+          <div class="ed-crow">${inp('roomId', 'RAUM-ID')}${inp('level', 'EBENE')}</div>
+          ${chk('cluttered', 'CLUTTERED (SONST OPEN)')}
+          ${chk('core', '★ KERNORT')}
+          <div class="ed-head">NUR ANGEZEIGT, WENN VORHANDEN</div>
+          ${chk('terminal', `TERMINAL${facts.terminal !== !!e.terminal ? ` <span class="dim">(KARTE: ${facts.terminal ? 'JA' : 'NEIN'})</span>` : ''}`)}
+          <div class="ed-crow">${num('shafts', '# SCHACHTZUGÄNGE', facts.shafts)}${num('doors', '# TÜREN', facts.doors)}</div>
+          <div class="ed-btns"><button data-rlfacts title="Türen, Schachtzugänge und Terminal so übernehmen, wie sie auf der Karte eingezeichnet sind">WERTE AUS DER KARTE ÜBERNEHMEN</button></div>`
+    : `<div class="ed-head">RAUMLISTE</div><p class="ed-note">Die Raumliste ist noch nicht geladen.</p><div class="ed-btns"><button data-rlsync>RAUMLISTE ☁ EINRICHTEN</button></div>`;
   detail.innerHTML = `
     <div class="ed-dwin">
       <header class="ed-dhead">
-        <div><span class="dim">RAUMBESCHREIBUNG // ${esc(level.name)}</span><h2 data-title>${esc(roomName(level, room, layer))}</h2></div>
+        <div><span class="dim">RAUM BEARBEITEN // ${esc(level.name)}</span><h2 data-title>${esc(e?.name || roomName(level, room, layer))}</h2></div>
         <button data-close>SCHLIESSEN ✕</button>
       </header>
       <div class="ed-dbody">
         <section class="ed-dcol">
-          <div class="ed-head">RAUMDATEN</div>
-          <div class="ed-crow ed-idrow"><label class="ed-field">RAUM-ID <input type="text" data-k="code" maxlength="20" value="${esc(data.code)}" placeholder="${esc(room.id)}"></label><label class="ed-field ed-checkf" title="Raum-ID auf der Karte anzeigen (im Raum verschiebbar)"><input type="checkbox" data-showid ${data.showId ? 'checked' : ''}> AUF KARTE</label></div>
-          <label class="ed-field">NAME <input type="text" data-k="name" maxlength="40" value="${esc(data.name)}" placeholder="${esc(roomName(level, room, { rooms: {} }))}"></label>
-          <label class="ed-field">BEREICH <input type="text" data-k="zoneName" maxlength="40" value="${esc(data.zoneName)}" placeholder="${esc(level.zones[room.zone] || room.zone)}"></label>
-          <label class="ed-check ed-big"><input type="checkbox" data-kb="cluttered" ${data.cluttered ? 'checked' : ''}> CLUTTERED</label>
+          ${listCol}
+          <div class="ed-head">KARTE & TERMINAL</div>
+          <div class="ed-crow ed-idrow"><label class="ed-field">ID AUF DER KARTE <input type="text" data-k="code" maxlength="20" value="${esc(data.code)}" placeholder="${esc(room.id)}"></label><label class="ed-field ed-checkf" title="Raum-ID auf der Karte anzeigen (im Raum verschiebbar)"><input type="checkbox" data-showid ${data.showId ? 'checked' : ''}> AUF KARTE</label></div>
+          <label class="ed-field">NAME IM TERMINAL <input type="text" data-k="name" maxlength="40" value="${esc(data.name)}" placeholder="${esc(roomName(level, room, { rooms: {} }))}"></label>
+          <label class="ed-field">BEREICH IM TERMINAL <input type="text" data-k="zoneName" maxlength="40" value="${esc(data.zoneName)}" placeholder="${esc(level.zones[room.zone] || room.zone)}"></label>
           <label class="ed-field">STATUS <select data-k="status">${Object.entries(STATUS).map(([k, v]) => `<option value="${k}" ${(data.status || '') === k ? 'selected' : ''}>${v}</option>`).join('')}</select></label>
-          <div class="ed-row"><span class="dim">EBENE</span><span>${esc(level.name)}</span></div>
-          <div class="ed-row"><span class="dim">TÜREN</span><span>${doors.length}${doors.length ? ` · ${['green', 'orange', 'red'].map((k) => { const n = doors.filter((d) => (d.sec || 'green') === k).length; return n ? `<span class="sec-t sec-${k}">${n}× ${SECURITY[k].label}</span>` : ''; }).filter(Boolean).join(' ')}` : ''}</span></div>
-          <div class="ed-row"><span class="dim">KAMERAS</span><span>${roomCams(layer, room).length}</span></div>
           <label class="ed-field">NOTIZ (ERSCHEINT IM TERMINAL) <textarea data-k="info" maxlength="300">${esc(data.info)}</textarea></label>
-
           <div class="ed-head">PIKTOGRAMME (${pics.length}/${MAX_PICTOS})</div>
           <div class="ed-dpics">
             ${pics.map((p, i) => `<div class="ed-dpic">${semioticSvg(p.id, 54)}<div><b>${esc(semioticById(p.id)?.name)}</b><br><span class="dim">${esc(semioticById(p.id)?.de)}</span>
@@ -1015,31 +1170,24 @@ function renderDetail() {
           <div class="ed-palette">${SEMIOTIC.map((sm) => `<button class="ed-pal" data-padd="${sm.id}" title="${sm.id}. ${esc(sm.name)} – ${esc(sm.de)}" ${pics.length >= MAX_PICTOS || pics.some((p) => p.id === sm.id) ? 'disabled' : ''}>${semioticSvg(sm.id, 38)}</button>`).join('')}</div>
         </section>
         <section class="ed-dcol wide">
-          <div class="ed-head">BESCHREIBUNG</div>
-          ${DESC_FIELDS.map(([k, label]) => field(k, label)).join('')}
-          <div class="ed-head">WAS FÜR GEGENSTÄNDE FINDET MAN</div>
-          <table class="ed-items">
-            <thead><tr><th>GEGENSTAND</th><th>ANZAHL</th><th>NOTIZ</th><th></th></tr></thead>
-            <tbody>${items.map((it, i) => `<tr>
-              <td><input type="text" data-item="${i}" data-f="name" value="${esc(it.name)}" list="eq-list"></td>
-              <td><input type="text" data-item="${i}" data-f="qty" value="${esc(it.qty)}" class="qty"></td>
-              <td><input type="text" data-item="${i}" data-f="note" value="${esc(it.note)}"></td>
-              <td><button class="danger" data-idel="${i}" title="Entfernen">✕</button></td></tr>`).join('')}
-            </tbody>
-          </table>
-          <div class="ed-additem">
-            <input type="text" id="eq-search" list="eq-list" placeholder="Gegenstand suchen oder frei eintippen …">
+          <div class="ed-head">BESCHREIBUNG (RAUMLISTE)</div>
+          ${e ? LIST_TEXT_FIELDS.map(([k, label]) => `<label class="ed-field">${label}<textarea data-rl="${k}" rows="${k === 'aesthetics' || k === 'investigate' ? 5 : 3}">${esc(e[k])}</textarea></label>`).join('') : '<p class="ed-note">Erst die Raumliste laden.</p>'}
+          ${e ? `<div class="ed-additem">
+            <input type="text" id="eq-search" list="eq-list" placeholder="Gegenstand aus der Ausrüstungsliste …">
             <input type="text" id="eq-qty" class="qty" placeholder="Anz.">
-            <button id="eq-add">HINZUFÜGEN</button>
+            <button id="eq-add">ZU „GEGENSTÄNDE“ HINZUFÜGEN</button>
             <button id="eq-manage">AUSRÜSTUNGSLISTE BEARBEITEN</button>
           </div>
           <datalist id="eq-list">${equipmentList().map((it) => `<option value="${esc(it.name)}">${esc(it.cat)}</option>`).join('')}</datalist>
-          <p class="ed-note" id="eq-info"></p>
+          <p class="ed-note" id="eq-info"></p>` : ''}
+          <p class="ed-note">Alles unter RAUMLISTE und BESCHREIBUNG wird mit der Handy-App abgeglichen. KARTE & TERMINAL betrifft nur Karte und Terminal.</p>
         </section>
       </div>
     </div>`;
   bindRoomFields(detail, room);
   detail.querySelector('[data-close]').addEventListener('click', closeDetail);
+  detail.querySelector('[data-rlsync]')?.addEventListener('click', () => { closeDetail(); openRoomSync(); });
+  if (e) bindListFields(e, room);
   detail.querySelectorAll('[data-pmap]').forEach((c) => c.addEventListener('change', () => {
     snapshot();
     const p = pics.map((x, i) => (i === Number(c.dataset.pmap) ? { ...x, map: c.checked } : x));
@@ -1055,38 +1203,39 @@ function renderDetail() {
   detail.querySelectorAll('[data-padd]').forEach((b) => b.addEventListener('click', () => {
     if (addPicto(room.id, Number(b.dataset.padd), !pics.some((p) => p.map))) renderDetail();
   }));
-  detail.querySelectorAll('[data-item]').forEach((inp) => {
-    inp.addEventListener('focus', snapshot);
-    inp.addEventListener('input', () => {
-      const list = (layer.rooms[room.id]?.items || []).map((x) => ({ ...x }));
-      list[Number(inp.dataset.item)][inp.dataset.f] = inp.value;
-      patchRoom(room.id, { items: list });
-      commit();
-    });
-  });
-  detail.querySelectorAll('[data-idel]').forEach((b) => b.addEventListener('click', () => {
-    snapshot();
-    patchRoom(room.id, { items: items.filter((_, i) => i !== Number(b.dataset.idel)) });
-    commit();
-    renderDetail();
+}
+
+// Eingaben im Bereich RAUMLISTE / BESCHREIBUNG direkt in den Eintrag schreiben (wird abgeglichen).
+function bindListFields(e, room) {
+  const save = (patch) => { updateEntry(e.id, patch); };
+  detail.querySelectorAll('[data-rl]').forEach((el) => el.addEventListener('input', () => {
+    save({ [el.dataset.rl]: el.value });
+    if (el.dataset.rl === 'name') detail.querySelector('[data-title]').textContent = el.value || roomName(level, room, layer);
   }));
+  detail.querySelectorAll('[data-rln]').forEach((el) => el.addEventListener('input', () => save({ [el.dataset.rln]: Math.max(0, parseInt(el.value, 10) || 0) })));
+  detail.querySelectorAll('[data-rlb]').forEach((el) => el.addEventListener('change', () => {
+    save({ [el.dataset.rlb]: el.checked });
+    if (el.dataset.rlb === 'cluttered') { snapshot(); patchRoom(room.id, { cluttered: el.checked || '' }); commit(); }  // Terminal zeigt CLUTTERED an
+  }));
+  detail.querySelector('[data-rlfacts]')?.addEventListener('click', () => { save(mapFacts(room)); renderDetail(); toast('WERTE AUS DER KARTE ÜBERNOMMEN'); });
   const search = detail.querySelector('#eq-search');
-  const showInfo = () => {
+  search.addEventListener('input', () => {
     const it = equipmentList().find((x) => x.name.toLowerCase() === search.value.trim().toLowerCase());
     detail.querySelector('#eq-info').textContent = it ? `${it.cat}${it.weight ? ` · Gewicht ${it.weight}` : ''}${it.cost ? ` · ${it.cost}` : ''}${it.effect ? ` · ${it.effect}` : ''}` : '';
-  };
-  search.addEventListener('input', showInfo);
+  });
   const add = () => {
     const name = search.value.trim();
     if (!name) return;
-    snapshot();
-    patchRoom(room.id, { items: [...items, { name, qty: detail.querySelector('#eq-qty').value.trim() || '1', note: '' }] });
-    commit();
-    renderDetail();
-    detail.querySelector('#eq-search').focus();
+    const qty = detail.querySelector('#eq-qty').value.trim();
+    const area = detail.querySelector('[data-rl="items"]');
+    area.value = `${area.value.trim() ? `${area.value.trim()}\n` : ''}${qty ? `${qty}× ` : ''}${name}`;
+    save({ items: area.value });
+    search.value = '';
+    detail.querySelector('#eq-qty').value = '';
+    search.focus();
   };
   detail.querySelector('#eq-add').addEventListener('click', add);
-  search.addEventListener('keydown', (e) => { if (e.key === 'Enter') add(); });
+  search.addEventListener('keydown', (ev) => { if (ev.key === 'Enter') add(); });
   detail.querySelector('#eq-manage').addEventListener('click', openEquip);
 }
 
@@ -1782,6 +1931,12 @@ const DESC_LABELS = {
   interact: 'Interaktion',
 };
 
+const LIST_LABELS = {
+  aesthetics: 'Allgemeine Ästhetik & Designprinzipien', smell: 'Was riecht man', look: 'Was sieht man', sound: 'Was hört man',
+  investigate: 'Was erfährt/findet man nach genauerer Untersuchung', interaction: 'Interaktion',
+  items: 'Was für Gegenstände findet man', notes: 'Notizen für die GM',
+};
+
 function roomListBlocks() {
   const blocks = [{ h: 1, text: `${CONFIG.station} – Raumliste ${level.name}` },
     { p: `${CONFIG.company} · ${CONFIG.moon} · ${CONFIG.planet} · ${CONFIG.star} · ${CONFIG.sector}` }];
@@ -1802,6 +1957,15 @@ function roomListBlocks() {
     blocks.push({ kv: ['Kameras', String(e.cams)] });
     blocks.push({ kv: ['Piktogramme', e.d.picto?.length ? e.d.picto.map((p) => `${semioticById(p.id)?.name}${p.map ? ' (auf der Karte)' : ''}`).join(', ') : '–'] });
     blocks.push({ kv: ['Notiz (Terminal)', dash(e.d.info)] });
+    // Beschreibung aus der Raumliste (falls gekoppelt), sonst die alten Kartendaten
+    const le = roomListEmpty() ? null : entryFor(e.room);
+    if (le) {
+      for (const [k, label] of LIST_TEXT_FIELDS) {
+        if (k === 'notes' && !String(le.notes || '').trim()) continue;
+        blocks.push({ kv: [LIST_LABELS[k] || label, dash(le[k])] });
+      }
+      continue;
+    }
     for (const [k, label] of DESC_FIELDS) blocks.push({ kv: [DESC_LABELS[k] || label, dash(e.d[k])] });
     if (e.d.items?.length) {
       blocks.push({ p: 'Was für Gegenstände findet man:', bold: true });
@@ -1921,6 +2085,20 @@ function init() {
   pick(1);
   $('#list-pdf').addEventListener('click', exportPdf);
   $('#list-odt').addEventListener('click', exportOdt);
+  $('#rl-sync').addEventListener('click', openRoomSync);
+  onRoomListChange((kind, s) => {
+    if (kind === 'status') {
+      $('#rl-sync').textContent = `RAUMLISTE ${s.state === 'error' ? '⚠' : s.state === 'syncing' ? '⟳' : '☁'}`;
+      $('#rl-sync').title = `Raumliste: ${syncLabel(s)}`;
+      if (!rlsync.hidden && !rlsync.contains(document.activeElement)) renderRoomSync();
+      return;
+    }
+    // Änderungen vom Handy: Anzeige auffrischen, aber nicht mitten im Tippen
+    const typing = document.activeElement?.closest?.('input, textarea, select');
+    if (!detail.hidden && !(typing && detail.contains(typing))) renderDetail();
+    if (detail.hidden && !(typing && props.contains(typing))) renderProps();
+  });
+  roomSync.start();
   $('#undo').addEventListener('click', undo);
   $('#redo').addEventListener('click', redo);
   $('#export').addEventListener('click', exportLayer);
@@ -1962,8 +2140,9 @@ function init() {
     ctrlPreview(e);
     if (e.key === 'Escape' && !equip.hidden) { closeEquip(); return; }
     if (e.key === 'Escape' && !detail.hidden) { closeDetail(); return; }
+    if (e.key === 'Escape' && !rlsync.hidden) { closeRoomSync(); return; }
     if (e.target.closest('input, textarea, select')) return;
-    if (!detail.hidden || !equip.hidden) return;
+    if (!detail.hidden || !equip.hidden || !rlsync.hidden) return;
     if (document.body.classList.contains('tab-content')) return;
     const k = e.key.toLowerCase();
     if ((e.ctrlKey || e.metaKey) && k === 'z') { e.preventDefault(); if (e.shiftKey) redo(); else undo(); return; }
