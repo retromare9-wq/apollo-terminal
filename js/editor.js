@@ -507,6 +507,7 @@ function renderProps() {
       <div class="ed-crow ed-idrow"><label class="ed-field">RAUM-ID <input type="text" data-k="code" maxlength="20" value="${esc(data.code)}" placeholder="${esc(room.id)}"></label><label class="ed-field ed-checkf" title="Raum-ID auf der Karte anzeigen (im Raum verschiebbar)"><input type="checkbox" data-showid ${data.showId ? 'checked' : ''}> AUF KARTE</label></div>
       <label class="ed-field">NAME <input type="text" data-k="name" maxlength="40" value="${esc(data.name)}" placeholder="${esc(roomName(level, room, { rooms: {} }))}"></label>
       <label class="ed-field">BEREICH <input type="text" data-k="zoneName" maxlength="40" value="${esc(data.zoneName)}" placeholder="${esc(level.zones[room.zone] || room.zone)}"></label>
+      <label class="ed-field">UNTERBEREICH <input type="text" data-k="subZone" maxlength="40" value="${esc(data.subZone)}" placeholder="optional"></label>
       <label class="ed-check ed-big"><input type="checkbox" data-kb="cluttered" ${data.cluttered ? 'checked' : ''}> CLUTTERED</label>
       <label class="ed-field">STATUS <select data-k="status">${Object.entries(STATUS).map(([k, v]) => `<option value="${k}" ${(data.status || '') === k ? 'selected' : ''}>${v}</option>`).join('')}</select></label>
       <label class="ed-field">NOTIZ (ERSCHEINT IM TERMINAL) <textarea data-k="info" maxlength="300">${esc(data.info)}</textarea></label>
@@ -802,7 +803,25 @@ function objectAt(e) {
   return t ? { kind: t.dataset.kind, id: t.dataset.oid } : null;
 }
 
+// Zwei Finger: Zoomen und Verschieben (Tablet)
+const touches = new Map();
+function pinchState() {
+  const a = [...touches.values()];
+  return { cx: (a[0].x + a[1].x) / 2, cy: (a[0].y + a[1].y) / 2, dist: Math.hypot(a[0].x - a[1].x, a[0].y - a[1].y) };
+}
+
 function onDown(e) {
+  if (e.pointerType === 'touch') {
+    touches.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (touches.size === 2) {
+      // laufende Aktion des ersten Fingers abbrechen, dann Zwei-Finger-Geste
+      if (st.drag?.moved && st.drag.type !== 'pan') undo();
+      st.drag = { type: 'pinch', last: pinchState() };
+      drawUi();
+      return;
+    }
+    if (touches.size > 2) return;
+  }
   if (e.button === 1 || e.button === 2) { startPan(e); return; }
   if (e.button !== 0) return;
   const pt = toMap(e);
@@ -999,6 +1018,7 @@ function renderDetail() {
           <div class="ed-crow ed-idrow"><label class="ed-field">RAUM-ID <input type="text" data-k="code" maxlength="20" value="${esc(data.code)}" placeholder="${esc(room.id)}"></label><label class="ed-field ed-checkf" title="Raum-ID auf der Karte anzeigen (im Raum verschiebbar)"><input type="checkbox" data-showid ${data.showId ? 'checked' : ''}> AUF KARTE</label></div>
           <label class="ed-field">NAME <input type="text" data-k="name" maxlength="40" value="${esc(data.name)}" placeholder="${esc(roomName(level, room, { rooms: {} }))}"></label>
           <label class="ed-field">BEREICH <input type="text" data-k="zoneName" maxlength="40" value="${esc(data.zoneName)}" placeholder="${esc(level.zones[room.zone] || room.zone)}"></label>
+          <label class="ed-field">UNTERBEREICH <input type="text" data-k="subZone" maxlength="40" value="${esc(data.subZone)}" placeholder="optional"></label>
           <label class="ed-check ed-big"><input type="checkbox" data-kb="cluttered" ${data.cluttered ? 'checked' : ''}> CLUTTERED</label>
           <label class="ed-field">STATUS <select data-k="status">${Object.entries(STATUS).map(([k, v]) => `<option value="${k}" ${(data.status || '') === k ? 'selected' : ''}>${v}</option>`).join('')}</select></label>
           <div class="ed-row"><span class="dim">EBENE</span><span>${esc(level.name)}</span></div>
@@ -1619,6 +1639,19 @@ function startPan(e, clickSelectsRoom = false) {
 }
 
 function onMove(e) {
+  if (e.pointerType === 'touch' && touches.has(e.pointerId)) touches.set(e.pointerId, { x: e.clientX, y: e.clientY });
+  if (st.drag?.type === 'pinch') {
+    if (touches.size < 2) return;
+    const now = pinchState();
+    const last = st.drag.last;
+    const toM = (x, y) => { const p = svg.createSVGPoint(); p.x = x; p.y = y; return p.matrixTransform(svg.getScreenCTM().inverse()); };
+    const a = toM(last.cx, last.cy);
+    const b = toM(now.cx, now.cy);
+    setVB({ ...st.vb, x: st.vb.x + a.x - b.x, y: st.vb.y + a.y - b.y });
+    if (last.dist > 0 && now.dist > 0) { const c = toM(now.cx, now.cy); zoomAt(last.dist / now.dist, c.x, c.y); }
+    st.drag.last = now;
+    return;
+  }
   const pt = toMap(e);
   st.ctrl = e.ctrlKey || e.metaKey;
   st.mouse = pt;
@@ -1628,7 +1661,7 @@ function onMove(e) {
     const k = st.vb.w / svg.clientWidth;
     const dx = (e.clientX - d.sx) * k;
     const dy = (e.clientY - d.sy) * k;
-    if (Math.abs(e.clientX - d.sx) + Math.abs(e.clientY - d.sy) > 4) { d.moved = true; svg.classList.add('panning'); }
+    if (Math.abs(e.clientX - d.sx) + Math.abs(e.clientY - d.sy) > (e.pointerType === 'touch' ? 12 : 4)) { d.moved = true; svg.classList.add('panning'); }
     setVB({ ...d.vb, x: d.vb.x - dx, y: d.vb.y - dy });
     return;
   }
@@ -1691,6 +1724,8 @@ function onMove(e) {
 }
 
 function onUp(e) {
+  if (e.pointerType === 'touch') touches.delete(e.pointerId);
+  if (st.drag?.type === 'pinch') { if (touches.size === 0) st.drag = null; return; }
   const d = st.drag;
   st.drag = null;
   svg.classList.remove('panning');
@@ -1793,6 +1828,7 @@ function roomListBlocks() {
     blocks.push({ kv: ['Raum-ID', e.code] });
     blocks.push({ kv: ['Name', e.name] });
     blocks.push({ kv: ['Bereich', e.zone] });
+    if (e.d.subZone) blocks.push({ kv: ['Unterbereich', e.d.subZone] });
     blocks.push({ kv: ['Ebene', level.name] });
     blocks.push({ kv: ['Cluttered', e.d.cluttered ? 'Ja' : 'Nein'] });
     blocks.push({ kv: ['Status', STATUS[e.d.status || '']] });
@@ -1942,6 +1978,7 @@ function init() {
   svg.addEventListener('pointerdown', onDown);
   svg.addEventListener('pointermove', onMove);
   svg.addEventListener('pointerup', onUp);
+  svg.addEventListener('pointercancel', onUp);
   svg.addEventListener('pointerleave', () => drawUi());
   svg.addEventListener('contextmenu', (e) => e.preventDefault());
   svg.addEventListener('wheel', (e) => {

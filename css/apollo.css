@@ -101,7 +101,7 @@ body.crt .crt-overlay::after {
 .info-row.plain span:last-child { justify-content: flex-end; white-space: nowrap; }
 .info-logo .wy { width: 64px; fill: var(--amber); }
 
-.frame { border: 3px solid var(--amber); display: grid; grid-template-rows: 1fr 46px; min-height: 0; }
+.frame { position: relative; border: 3px solid var(--amber); display: grid; grid-template-rows: 1fr 46px; min-height: 0; }
 .view { position: relative; overflow: hidden; min-height: 0; }
 .cmdline { border-top: 2px solid var(--rust-2); display: flex; align-items: center; gap: 12px; padding: 0 18px; font-size: 21px; font-weight: 500; white-space: pre; overflow: hidden; }
 .prompt { color: var(--yellow); }
@@ -111,7 +111,7 @@ body.crt .crt-overlay::after {
 .status, .lockbox { border: 3px solid var(--amber); display: flex; align-items: center; gap: 12px; padding: 0 14px; font-size: 15px; font-weight: 500; white-space: nowrap; overflow: hidden; }
 .lockbox { flex-direction: column; align-items: stretch; justify-content: center; gap: 1px; padding: 0 12px; }
 .lb-row { display: flex; align-items: center; gap: 12px; min-width: 0; }
-.lb-row.keys { font-size: 14px; color: var(--amber); gap: 18px; }
+.lb-row.keys { font-size: 13px; color: var(--amber); gap: 12px; }
 .hint { color: var(--amber); font-size: 16px; letter-spacing: .03em; overflow: hidden; text-overflow: ellipsis; }
 .hk { color: var(--yellow); font-weight: 700; }
 #f-snd { margin-left: auto; }
@@ -452,3 +452,15 @@ body.destruct .screen::after { content: ''; position: absolute; inset: 0; pointe
 .theme-phosphor .st-corr-edge { fill: #23a352; stroke: #23a352; }
 .theme-phosphor .st-zone, .theme-phosphor .st-level, .theme-phosphor .st-row, .theme-phosphor .st-rid, .theme-phosphor .st-name, .theme-phosphor .st-num { fill: var(--ph-hi); }
 .theme-phosphor .ly-line { stroke: var(--ph-mid); }
+
+/* Touch / Maus */
+.map-svg { touch-action: none; }
+.map .st-room { cursor: pointer; }
+.sp-tap { cursor: pointer; }
+.lockbox .tap { cursor: pointer; }
+.lockbox .tap:hover { color: var(--yellow); }
+.cmdline { cursor: text; }
+.kbd { position: absolute; left: 0; bottom: 0; width: 1px; height: 1px; opacity: 0; border: 0; padding: 0; font-size: 16px; }
+
+.star-panel.compact { bottom: auto; height: auto; }
+.star-panel.compact .sp-key { margin-top: 12px; }

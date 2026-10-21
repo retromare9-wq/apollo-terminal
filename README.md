@@ -45,7 +45,8 @@ Im Selbstzerstörungs-Fenster bricht `ABBRUCH` (danach Code) ab; neu laden setzt
 | + / # (alle Karten) | Hinein- / herauszoomen |
 | F9 | Ton an/aus |
 | F10 | Röhrenmonitor-Effekt an/aus |
-| F11 | Vollbild (Browser) |
+| F11 / ⛶ VOLLBILD | Vollbild an/aus (auch per Klick unten rechts) |
+| Maus / Finger | Räume antippen, Karte ziehen, Mausrad bzw. zwei Finger zoomen; Eingabezeile antippen öffnet die Bildschirmtastatur |
 
 Während einer Karten-Animation überspringt jede Taste direkt zum Ziel.
 

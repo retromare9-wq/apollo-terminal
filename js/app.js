@@ -988,6 +988,7 @@ function onKey(e) {
   if (!state.ready) return;
   if (e.key === 'F9') { e.preventDefault(); sound.toggle(); updateFlags(); return; }
   if (e.key === 'F10') { e.preventDefault(); document.body.classList.toggle('crt'); return; }
+  if (e.key === 'F11') { e.preventDefault(); toggleFullscreen(); return; }
   const onPlan = state.view === 'map' && state.map && !state.map.animating;
   // Stationsplan: Ebene wechseln mit Strg + „+“ / Strg + „-“ (oder Bild↑ / Bild↓)
   if (onPlan && state.map.info?.plan && ((e.ctrlKey && ['+', '-', '=', 'Add', 'Subtract'].includes(e.key)) || e.key === 'PageUp' || e.key === 'PageDown')) {
@@ -1055,6 +1056,42 @@ function onKey(e) {
   }
 }
 
+// ---------- Maus, Touch, Vollbild ----------
+
+function toggleFullscreen() {
+  const d = document;
+  if (d.fullscreenElement || d.webkitFullscreenElement) (d.exitFullscreen || d.webkitExitFullscreen).call(d);
+  else {
+    const el = d.documentElement;
+    (el.requestFullscreen || el.webkitRequestFullscreen)?.call(el);
+  }
+}
+
+function initTouch() {
+  // Fußleiste: antippen statt Taste
+  document.querySelectorAll('.lockbox [data-act]').forEach((b) => b.addEventListener('click', () => {
+    const a = b.dataset.act;
+    if (a === 'full') { toggleFullscreen(); return; }
+    if (!state.ready || state.busy) return;
+    if (a === 'back') back();
+    else if (a === 'w' && state.user && state.view !== 'login') changeAccess();
+    else if (a === 'x' && state.user) logout();
+  }));
+  // Eingabezeile antippen: Bildschirmtastatur (Tablet) über ein verstecktes Eingabefeld
+  const kbd = $('#kbd');
+  const reset = () => { kbd.value = ' '; };
+  reset();
+  $('.cmdline').addEventListener('click', () => { reset(); kbd.focus(); });
+  kbd.addEventListener('input', () => {
+    if (!state.ready || state.busy) { reset(); return; }
+    const v = kbd.value;
+    if (v.length < 1) { state.buffer = state.buffer.slice(0, -1); sound.click(); }
+    else state.buffer = (state.buffer + v.slice(1)).slice(0, 72);
+    reset();
+    renderCmd();
+  });
+}
+
 // ---------- Start ----------
 
 // Änderungen aus dem Editor (anderes Fenster) live übernehmen
@@ -1075,6 +1112,7 @@ async function main() {
   fit();
   addEventListener('resize', fit);
   addEventListener('keydown', onKey);
+  initTouch();
   initChrome();
   await runBoot($('#boot'), CONFIG, sound);
   const app = $('#app');

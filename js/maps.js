@@ -182,15 +182,85 @@ export class MapView {
     this.stIdx = Math.max(0, this.stationLevels.findIndex((l) => levelNum(l.plan.name) === 0));
     // Aufzug im Stationsplan anklicken: erreichbare Ebenen anzeigen
     this.svg.addEventListener('click', (e) => {
+      if (this.dragged) { this.dragged = false; return; }   // nach Ziehen/Zoomen kein Klick
+      if (this.animating) return;
       const l = e.target.closest?.('[data-lift]');
-      if (l && this.info?.plan && !this.animating) this.showLift(l.dataset.lift);
+      if (l && this.info?.plan) { this.showLift(l.dataset.lift); return; }
       const go = e.target.closest?.('[data-goto]');
-      if (go) this.gotoLevel(Number(go.dataset.goto));
+      if (go) { this.gotoLevel(Number(go.dataset.goto)); return; }
+      // Raum per Maus / Finger wählen
+      const r = e.target.closest?.('.st-room[data-id]');
+      if (r && this.info?.plan) {
+        const i = this.rooms().findIndex((x) => x.id === r.dataset.id);
+        if (i >= 0) this.focusRoom(i);
+      }
     });
     this.panel.addEventListener('click', (e) => {
       const go = e.target.closest?.('[data-goto]');
-      if (go) this.gotoLevel(Number(go.dataset.goto));
+      if (go) { this.gotoLevel(Number(go.dataset.goto)); return; }
+      if (e.target.closest?.('[data-next]')) this.descend();
     });
+    this.initTouch();
+  }
+
+  // ---------- Ziehen und Zoomen mit Maus / Fingern ----------
+
+  initTouch() {
+    const pts = new Map();
+    let last = null;
+    const mapPt = (x, y) => {
+      const p = this.svg.createSVGPoint();
+      p.x = x;
+      p.y = y;
+      return p.matrixTransform(this.svg.getScreenCTM().inverse());
+    };
+    const state = () => {
+      const a = [...pts.values()];
+      const cx = a.reduce((s, p) => s + p.x, 0) / a.length;
+      const cy = a.reduce((s, p) => s + p.y, 0) / a.length;
+      const dist = a.length > 1 ? Math.hypot(a[0].x - a[1].x, a[0].y - a[1].y) : 0;
+      return { cx, cy, dist, n: a.length };
+    };
+    this.svg.addEventListener('pointerdown', (e) => {
+      if (!this.info || this.animating) return;
+      pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      last = state();
+      this.moveSum = 0;
+      this.dragged = false;
+    });
+    this.svg.addEventListener('pointermove', (e) => {
+      if (!pts.has(e.pointerId) || this.animating) return;
+      pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      const now = state();
+      if (!last || now.n !== last.n) { last = now; return; }
+      this.moveSum += Math.hypot(now.cx - last.cx, now.cy - last.cy) + Math.abs(now.dist - last.dist);
+      if (this.moveSum < 8) return;
+      this.dragged = true;
+      this.token++;   // laufende Zoom-Animation abbrechen
+      const r = this.vb || this.home;
+      const a = mapPt(last.cx, last.cy);
+      const b = mapPt(now.cx, now.cy);
+      let next = { ...r, x: r.x + a.x - b.x, y: r.y + a.y - b.y };
+      if (now.n > 1 && last.dist > 0) {
+        const f = Math.min(Math.max(r.w * (last.dist / now.dist), 250), this.home.w * 1.5) / r.w;
+        next = { x: b.x - (b.x - next.x) * f, y: b.y - (b.y - next.y) * f, w: r.w * f, h: r.h * f };
+      }
+      this.setVB(next);
+      last = now;
+    });
+    const up = (e) => { pts.delete(e.pointerId); last = pts.size ? state() : null; };
+    this.svg.addEventListener('pointerup', up);
+    this.svg.addEventListener('pointercancel', up);
+    // Mausrad zoomt ebenfalls
+    this.svg.addEventListener('wheel', (e) => {
+      if (!this.info || this.animating) return;
+      e.preventDefault();
+      const r = this.vb || this.home;
+      const p = mapPt(e.clientX, e.clientY);
+      const f = Math.min(Math.max(r.w * (e.deltaY > 0 ? 1.15 : 1 / 1.15), 250), this.home.w * 1.5) / r.w;
+      this.token++;
+      this.setVB({ x: p.x - (p.x - r.x) * f, y: p.y - (p.y - r.y) * f, w: r.w * f, h: r.h * f });
+    }, { passive: false });
   }
 
   // ---------- Ebenen des Stationsplans ----------
@@ -259,6 +329,7 @@ export class MapView {
       ${d.access ? `<div class="sp-note">${escA(d.access)}</div>` : ''}
       <div class="sp-key">ZIFFER EINTIPPEN · ↑ ÜBERSICHT</div>`;
     this.panel.hidden = false;
+    this.panel.classList.remove('compact');
     this.sound.beep();
   }
 
@@ -370,7 +441,8 @@ export class MapView {
       ${sm.rows.map(([k, v]) => `<div class="sp-row"><span class="dim">${escH(k)}</span><span>${markH(v)}</span></div>`).join('')}
       <div class="sp-head">LEGEND</div>
       ${sm.legend.map(([cls, name, sub]) => `<div class="sp-leg"><i class="sw ${cls}"></i><span>${escH(name)}${sub ? `<small>${escH(sub)}</small>` : ''}</span></div>`).join('')}
-      <div class="sp-key"><span class="hl">A</span> ${this.info.next}</div>`;
+      <div class="sp-key sp-tap" data-next><span class="hl">A</span> ${this.info.next}</div>`;
+    this.panel.classList.remove('compact');
     this.panel.hidden = false;
     const items = [...this.panel.children];
     if (instant) return;
@@ -510,34 +582,20 @@ export class MapView {
     if (this.onRoom) this.onRoom(null);
   }
 
+  // Raumanzeige: Oberbereich, ggf. Unterbereich, Name, Raum-ID
   showRoom(room, level) {
     const layer = this.info.plan.layer;
     const data = layer.rooms[room.id] || {};
-    const st = {
-      warn: '<span class="warn">▲ WARNUNG</span>',
-      damage: '<span class="crit blink">▲ SCHADEN</span>',
-      offline: '<span class="crit">■ OFFLINE</span>',
-      sealed: '<span class="crit">◆ ABGERIEGELT</span>',
-    }[data.status] || 'IN ORDNUNG';
-    const doors = roomDoors(layer, room);
-    const levels = ['green', 'orange', 'red'].filter((k) => doors.some((d) => (d.sec || 'green') === k));
-    const cams = layer.settings.showCams ? roomCams(layer, room).length : 0;
-    const esc = (t) => String(t).replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
+    const esc = (t) => String(t ?? '').replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
     this.panel.innerHTML = `
       <div class="sp-head">RAUMDATEN</div>
-      <div class="sp-title">${esc(roomName(level, room, layer))}</div>
-      <div class="sp-row"><span class="dim">ID</span><span>${esc(roomCode(room, layer))}</span></div>
       <div class="sp-row"><span class="dim">BEREICH</span><span>${esc(roomZone(level, room, layer))}</span></div>
-      <div class="sp-row"><span class="dim">EBENE</span><span>${level.name}</span></div>
-      <div class="sp-row"><span class="dim">ZUGÄNGE</span><span>${doors.length}${levels.length ? ` · ${levels.map((k) => `<span class="sec-t sec-${k}">${SECURITY[k].label}</span>`).join(' ')}` : ''}</span></div>
-      <div class="sp-row"><span class="dim">STATUS</span><span>${st}</span></div>
-      ${data.cluttered ? '<div class="sp-row"><span class="dim">ZUSTAND</span><span class="warn">CLUTTERED</span></div>' : ''}
-      ${roomShafts(layer, room).filter((x) => x.show).length ? `<div class="sp-row"><span class="dim">SCHACHTZUGANG</span><span>${roomShafts(layer, room).filter((x) => x.show).map((x) => esc(x.sid || roomCode(room, layer))).join(', ')}</span></div>` : ''}
-      ${layer.settings.showCams ? `<div class="sp-row"><span class="dim">ÜBERWACHUNG</span><span>${cams ? `<span class="mint">KAMERA AKTIV${cams > 1 ? ` (${cams})` : ''}</span>` : 'KEINE KAMERA'}</span></div>` : ''}
-      ${data.picto?.length ? `<div class="sp-pics">${data.picto.map((p) => semioticSvg(p.id, 38)).join('')}</div>` : ''}
-      ${data.info ? `<div class="sp-note">${esc(data.info)}</div>` : ''}
+      ${data.subZone ? `<div class="sp-row"><span class="dim">UNTERBEREICH</span><span>${esc(data.subZone)}</span></div>` : ''}
+      <div class="sp-row"><span class="dim">NAME</span><span>${esc(roomName(level, room, layer))}</span></div>
+      <div class="sp-row"><span class="dim">RAUM-ID</span><span>${esc(roomCode(room, layer))}</span></div>
       <div class="sp-key">←→ RAUM · ↑ ÜBERSICHT</div>`;
     this.panel.hidden = false;
+    this.panel.classList.add('compact');
     if (this.onRoom) this.onRoom(room);
   }
 
