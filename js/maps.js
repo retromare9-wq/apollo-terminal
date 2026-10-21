@@ -334,6 +334,25 @@ export class MapView {
     this.sound.beep();
   }
 
+  // Ebenenwahl (Titelleiste antippen): alle Ebenen der Karte, Ziffer oder Antippen wechselt
+  showLevelMenu() {
+    if (!this.info?.plan) return;
+    const levels = this.stationLevels;
+    const here = levels[this.stIdx || 0];
+    const list = levels.map((l, idx) => ({ l, idx })).filter((x) => x.l.mapId === here?.mapId);
+    // höchste Ebene oben
+    if (list.every((x) => levelNum(x.l.plan.name) != null)) list.sort((a, b) => levelNum(b.l.plan.name) - levelNum(a.l.plan.name));
+    this.liftChoices = list.map((x) => x.idx);
+    const escA = (t) => String(t ?? '').replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
+    this.panel.innerHTML = `
+      <div class="sp-head">EBENE WÄHLEN</div>
+      ${list.map((x, i) => `<div class="sp-row sp-go${x.idx === (this.stIdx || 0) ? ' here' : ''}" data-goto="${x.idx}"><span><b class="hk">${i + 1}</b> ${escA(x.l.plan.name)}</span><span class="dim">${x.idx === (this.stIdx || 0) ? 'HIER' : ''}</span></div>`).join('')}
+      <div class="sp-key">ANTIPPEN ODER ZIFFER EINTIPPEN · ↑ SCHLIESSEN</div>`;
+    this.panel.classList.add('compact');
+    this.panel.hidden = false;
+    this.sound.beep();
+  }
+
   // Ziffer im Aufzugsmenü
   chooseLift(n) {
     const idx = this.liftChoices?.[n - 1];

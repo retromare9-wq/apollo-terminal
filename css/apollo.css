@@ -464,3 +464,7 @@ body.destruct .screen::after { content: ''; position: absolute; inset: 0; pointe
 
 .star-panel.compact { bottom: auto; height: auto; }
 .star-panel.compact .sp-key { margin-top: 12px; }
+
+.title-lvl { cursor: pointer; border-bottom: 3px solid var(--ink); padding: 0 4px; }
+.title-lvl:hover { background: var(--ink); color: var(--yellow); }
+.sp-go { padding: 4px 0; }

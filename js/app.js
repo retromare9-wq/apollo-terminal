@@ -346,6 +346,16 @@ function showMap(topic) {
     sound,
     onLevel: (i, info) => {
       setTitle(info.title, `R${i + 1} ◂`);
+      // Stationsplan: Ebenenname in der Titelleiste antippen = Ebene wählen
+      if (info.plan && state.map?.stationLevels.length > 1) {
+        const name = info.plan.level.name;
+        const t = $('#title');
+        const k = info.title.lastIndexOf(name);
+        if (k >= 0) {
+          t.innerHTML = `${esc(info.title.slice(0, k))}<span class="title-lvl" title="Ebene wählen">${esc(name)} ▾</span>`;
+          t.querySelector('.title-lvl').addEventListener('click', () => { if (state.map && !state.map.animating) state.map.showLevelMenu(); });
+        }
+      }
       if (info.plan) setHint(`←→ RAUM · RAUM-ID EINTIPPEN${state.map?.stationLevels.length > 1 ? ' · STRG +/− EBENE' : ''} · STRG+PFEILE · +/# ZOOM · ESC`);
       else setHint('↓/↑ WEITER/ZURÜCK · STRG+PFEILE BEWEGEN · +/# ZOOM · ESC MENÜ');
     },
