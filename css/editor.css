@@ -201,3 +201,25 @@ svg.z-mid .mm-minor { stroke: transparent; }
 .editor button.ed-remind { border-color: var(--red); color: var(--ink); background: var(--red); animation: blink 1.6s steps(1) infinite; }
 
 .ed-liftcopy select { flex: 1; min-width: 0; background: #120905; color: var(--amber); border: 2px solid var(--amber-dim); font: 700 12px var(--font); padding: 5px; }
+
+/* ---------- Raumliste (Handy-App) ---------- */
+.rl-card { border: 2px solid var(--amber); padding: 8px 10px; margin: 6px 0 12px; background: rgba(212, 112, 44, .06); }
+.rl-card.rl-none p { margin: 4px 0; color: var(--amber-dim); font-weight: 700; }
+.rl-head { display: flex; gap: 8px; align-items: flex-start; }
+.rl-star { flex: none; width: 34px; height: 34px; padding: 0; font-size: 20px; line-height: 1; color: var(--amber-dim); }
+.rl-star.on { color: var(--yellow); border-color: var(--yellow); }
+.rl-path { font-size: 11px; }
+.rl-name { font-weight: 700; color: var(--yellow); font-size: 15px; }
+.rl-facts { display: flex; flex-wrap: wrap; gap: 4px; margin: 8px 0; }
+.rl-facts span { font-size: 11px; padding: 1px 6px; border: 1px solid var(--amber-dim); }
+.rl-facts b { color: var(--yellow); }
+.rl-f { border-top: 1px solid var(--rust); padding: 6px 0; }
+.rl-f span { font-size: 10px; letter-spacing: .05em; }
+.rl-f p { margin: 2px 0 0; font-size: 13px; line-height: 1.4; }
+.rl-aes p { font-style: italic; color: var(--amber-dim); }
+.rl-primary { font-weight: 700; border-color: var(--yellow) !important; color: var(--yellow) !important; }
+.rl-mapval { display: block; font-size: 10px; margin-top: 3px; }
+.rl-win { width: min(560px, 100%); align-self: center; }
+.rl-state { font-weight: 700; color: var(--amber); }
+.rl-ok { color: var(--mint); }
+.rl-error { color: var(--sec-red); }

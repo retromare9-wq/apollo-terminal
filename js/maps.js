@@ -6,6 +6,7 @@ import { el, txt, rng } from './svg.js';
 import { drawStarmap, SOL } from './starmap.js';
 import { drawStationPlan, roomName, roomCode, roomZone, frame, applyZoom, liftData } from './stationplan.js';
 import { levelNum } from './plans.js';
+import { findEntry } from './roomlist.js';
 import { semioticSvg } from './semiotic.js';
 import { loadLayer, roomDoors, roomCams, roomShafts, SECURITY } from './layer.js';
 
@@ -587,12 +588,21 @@ export class MapView {
     const layer = this.info.plan.layer;
     const data = layer.rooms[room.id] || {};
     const esc = (t) => String(t ?? '').replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
+    // Angaben aus der Raumliste (falls verknüpft), sonst aus den Kartendaten
+    let e = null;
+    try {
+      e = findEntry({ levelId: this.stationLevels[this.stIdx || 0]?.id, levelNo: levelNum(level.name), room, code: roomCode(room, layer), zone: roomZone(level, room, layer) });
+    } catch { /* ohne Raumliste */ }
+    const area = e?.area || roomZone(level, room, layer);
+    const sub = e?.subarea || data.subZone || '';
+    const name = e?.name || roomName(level, room, layer);
+    const code = e?.roomId || roomCode(room, layer);
     this.panel.innerHTML = `
       <div class="sp-head">RAUMDATEN</div>
-      <div class="sp-row"><span class="dim">BEREICH</span><span>${esc(roomZone(level, room, layer))}</span></div>
-      ${data.subZone ? `<div class="sp-row"><span class="dim">UNTERBEREICH</span><span>${esc(data.subZone)}</span></div>` : ''}
-      <div class="sp-row"><span class="dim">NAME</span><span>${esc(roomName(level, room, layer))}</span></div>
-      <div class="sp-row"><span class="dim">RAUM-ID</span><span>${esc(roomCode(room, layer))}</span></div>
+      <div class="sp-row"><span class="dim">BEREICH</span><span>${esc(String(area).toUpperCase())}</span></div>
+      ${sub ? `<div class="sp-row"><span class="dim">UNTERBEREICH</span><span>${esc(String(sub).toUpperCase())}</span></div>` : ''}
+      <div class="sp-row"><span class="dim">NAME</span><span>${esc(String(name).toUpperCase())}</span></div>
+      <div class="sp-row"><span class="dim">RAUM-ID</span><span>${esc(String(code).toUpperCase())}</span></div>
       <div class="sp-key">←→ RAUM · ↑ ÜBERSICHT</div>`;
     this.panel.hidden = false;
     this.panel.classList.add('compact');
