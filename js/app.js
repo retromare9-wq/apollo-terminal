@@ -19,7 +19,7 @@ const state = {
   view: 'menu',
   menuIndex: 0,
   personIndex: 0,
-  ikFilter: '',        // Interkomm: Filter nach Funktion ('' = alle)
+  ikFilter: '',        // Interkomm: Filter nach Abteilung ('' = alle)
   buffer: '',
   busy: false,
   typing: null,
@@ -369,16 +369,16 @@ function showMap(topic) {
 // Interkomm: Personen alphabetisch nach Nachnamen, optional nach Funktion gefiltert
 const up = (t) => String(t ?? '').toUpperCase();
 const surname = (name) => up(name).replace(/[^A-ZÄÖÜ0-9 -]/g, ' ').trim().split(/\s+/).pop() || '';
-const ikRoles = () => [...new Set(PERSONNEL.map((p) => up(p.role).trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'de'));
+const ikDepts = () => [...new Set(PERSONNEL.map((p) => up(p.location).trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'de'));
 function ikOrder() {
   return PERSONNEL.map((p, i) => ({ p, i }))
-    .filter(({ p }) => !state.ikFilter || up(p.role).trim() === state.ikFilter)
+    .filter(({ p }) => !state.ikFilter || up(p.location).trim() === state.ikFilter)
     .sort((a, b) => surname(a.p.name).localeCompare(surname(b.p.name), 'de') || up(a.p.name).localeCompare(up(b.p.name), 'de'))
     .map(({ i }) => i);
 }
 
 function ikFilterStep(dir) {
-  const roles = ['', ...ikRoles()];
+  const roles = ['', ...ikDepts()];
   const k = roles.indexOf(state.ikFilter);
   state.ikFilter = roles[(k + dir + roles.length) % roles.length];
   sound.click();
@@ -389,13 +389,13 @@ function showInterkom() {
   leave();
   state.view = 'interkom';
   setTitle('INTERKOMM', '3C ◂');
-  setHint('↑↓ WÄHLEN · ←→ FUNKTION FILTERN · *A* ANRUFEN · *B* NACHRICHT · ESC MENÜ');
-  if (state.ikFilter && !ikRoles().includes(state.ikFilter)) state.ikFilter = '';
+  setHint('↑↓ WÄHLEN · ←→ ABTEILUNG FILTERN · *A* ANRUFEN · *B* NACHRICHT · ESC MENÜ');
+  if (state.ikFilter && !ikDepts().includes(state.ikFilter)) state.ikFilter = '';
   const order = ikOrder();
   if (!order.includes(state.personIndex)) state.personIndex = order[0] ?? 0;
   view.innerHTML = `<div class="ik">
       <div class="ik-side">
-        <div class="ik-filter"><span class="ik-fbtn" data-f="-1">◂</span><span class="ik-ftext"><span class="dim">FUNKTION:</span> ${esc(state.ikFilter || 'ALLE')}</span><span class="ik-fbtn" data-f="1">▸</span></div>
+        <label class="ik-filter"><span class="dim">ABTEILUNG</span><select class="ik-select">${['', ...ikDepts()].map((d) => `<option value="${esc(d)}" ${d === state.ikFilter ? 'selected' : ''}>${esc(d || 'ALLE ABTEILUNGEN')}</option>`).join('')}</select></label>
         <ul class="ik-list">${order.map((i, n) => `<li data-i="${i}"><span class="k">${pad(n + 1)}</span><span>${esc(up(PERSONNEL[i].name))}</span></li>`).join('') || '<li class="dim">KEINE PERSONEN</li>'}</ul>
       </div>
       <section class="ik-profile"></section>
@@ -403,8 +403,9 @@ function showInterkom() {
   view.querySelectorAll('.ik-list li[data-i]').forEach((li) => {
     li.addEventListener('click', () => { state.personIndex = +li.dataset.i; renderProfile(); });
   });
-  view.querySelectorAll('.ik-fbtn').forEach((b) => b.addEventListener('click', () => ikFilterStep(Number(b.dataset.f))));
-  view.querySelector('.ik-ftext').addEventListener('click', () => ikFilterStep(1));
+  const sel = view.querySelector('.ik-select');
+  sel.addEventListener('change', () => { state.ikFilter = sel.value; sel.blur(); sound.click(); showInterkom(); });
+  sel.addEventListener('keydown', (e) => e.stopPropagation());
   if (order.length) renderProfile();
 }
 
@@ -433,7 +434,7 @@ function renderProfile() {
     <div class="pdata">
       <div class="prow"><span class="dim">NAME</span><span>${esc(up(p.name))}</span></div>
       <div class="prow"><span class="dim">FUNKTION</span><span>${esc(up(p.role))}</span></div>
-      <div class="prow"><span class="dim">STANDORT</span><span>${colorize(up(p.location))}</span></div>
+      <div class="prow"><span class="dim">ABTEILUNG</span><span>${colorize(up(p.location))}</span></div>
       <div class="prow"><span class="dim">STATUS</span><span class="${p.available ? 'mint' : 'crit'}">${p.available ? 'VERFÜGBAR' : 'NICHT ERREICHBAR'}</span></div>
       <div class="pactions">
         <span class="act" data-a="call"><span class="k">[A]</span> ANRUFEN</span>

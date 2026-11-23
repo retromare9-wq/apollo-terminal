@@ -351,7 +351,7 @@ export function createContentEditor(root, { getLevel, getLayer, setRoomStatus, t
           <div class="ed-crow">
             ${input('NAME', `personnel.${i}.name`)}
             ${input('FUNKTION', `personnel.${i}.role`)}
-            ${input('STANDORT', `personnel.${i}.location`)}
+            ${input('ABTEILUNG', `personnel.${i}.location`)}
             <label class="ed-field ed-checkf"><input type="checkbox" data-path="personnel.${i}.available" data-conv="bool"> ERREICHBAR</label>
             <button data-move="personnel.${i}" data-dir="-1">↑</button><button data-move="personnel.${i}" data-dir="1">↓</button>
             ${del(`personnel.${i}`)}
