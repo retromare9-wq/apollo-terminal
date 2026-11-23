@@ -223,3 +223,10 @@ svg.z-mid .mm-minor { stroke: transparent; }
 .rl-state { font-weight: 700; color: var(--amber); }
 .rl-ok { color: var(--mint); }
 .rl-error { color: var(--sec-red); }
+
+/* Porträt-Ausschnitt */
+.ed-croprow { align-items: flex-start !important; gap: 16px !important; margin: 6px 0 4px; }
+.ed-cropprev { flex: 0 0 125px; height: 150px; border: 2px solid var(--amber); background-color: #120905; background-repeat: no-repeat; filter: grayscale(1) sepia(1) saturate(2.6) hue-rotate(-12deg) contrast(1.25) brightness(.85); }
+.ed-cropctl { flex: 1; }
+.ed-slider { margin: 4px 0 !important; }
+.ed-slider input[type=range] { width: 100%; accent-color: var(--mint); }

@@ -67,6 +67,21 @@ const imageRow = (path, img) => `<div class="ed-crow ed-imgrow">
   ${img ? `<button class="danger" data-noimg="${path}">BILD ENTFERNEN</button>` : ''}
 </div>`;
 
+// Bildausschnitt eines Porträts: Vorschau im Seitenverhältnis des Terminals (250 × 300)
+const cropStyle = (img, c, raw = false) => `background-image:url(${raw ? `"${img}"` : `&quot;${esc(img)}&quot;`});background-size:${c ? `${Number(c.z) || 100}% auto` : 'cover'};background-position:${c ? `${c.x ?? 50}% ${c.y ?? 0}%` : '50% 15%'}`;
+const cropRow = (i, p) => {
+  const c = p.crop || { z: 100, x: 50, y: 0 };
+  const sl = (k, label, min, max) => `<label class="ed-field ed-slider">${label} <span class="ed-val" data-cropval="${i}:${k}">${c[k]}</span><input type="range" min="${min}" max="${max}" step="1" value="${c[k]}" data-crop="${i}:${k}"></label>`;
+  return `<div class="ed-crow ed-croprow">
+    <div class="ed-cropprev" data-cropprev="${i}" style="${cropStyle(p.image, p.crop)}"></div>
+    <div class="ed-cropctl">
+      <div class="ed-ihead">BILDAUSSCHNITT IM TERMINAL – ZIEL: KOPF UND OBERKÖRPER, ÜBER DEM KOPF ETWAS FREI</div>
+      ${sl('z', 'ZOOM %', 30, 250)}${sl('x', 'LINKS ↔ RECHTS', 0, 100)}${sl('y', 'OBEN ↕ UNTEN', 0, 100)}
+      <div class="ed-btns"><button data-cropreset="${i}">AUTOMATISCH</button></div>
+    </div>
+  </div>`;
+};
+
 // Bild auf höchstens 320 px verkleinern und als JPEG-Daten speichern (passt in den Browser-Speicher)
 function shrinkImage(file, max = 320) {
   return new Promise((resolve, reject) => {
@@ -342,6 +357,7 @@ export function createContentEditor(root, { getLevel, getLayer, setRoomStatus, t
             ${del(`personnel.${i}`)}
           </div>
           ${imageRow(`personnel.${i}.image`, p.image)}
+          ${p.image ? cropRow(i, p) : ''}
         </div>`).join('')}
         <div class="ed-btns">${add('personnel', { name: 'NEUE PERSON', role: '', location: '', available: true, image: '' })}</div>
       </section>`,
@@ -545,6 +561,19 @@ export function createContentEditor(root, { getLevel, getLayer, setRoomStatus, t
         } catch { toast('BILD KONNTE NICHT GELESEN WERDEN'); }
       };
       f.click();
+    }));
+    root.querySelectorAll('[data-crop]').forEach((inp) => inp.addEventListener('input', () => {
+      const [i, k] = inp.dataset.crop.split(':');
+      const p = c.personnel[Number(i)];
+      p.crop = { z: 100, x: 50, y: 0, ...(p.crop || {}), [k]: Number(inp.value) };
+      root.querySelector(`[data-cropval="${i}:${k}"]`).textContent = inp.value;
+      root.querySelector(`[data-cropprev="${i}"]`).setAttribute('style', cropStyle(p.image, p.crop, true));
+      save();
+    }));
+    root.querySelectorAll('[data-cropreset]').forEach((b) => b.addEventListener('click', () => {
+      delete c.personnel[Number(b.dataset.cropreset)].crop;
+      saveContent(c);
+      render();
     }));
     root.querySelectorAll('[data-noimg]').forEach((b) => b.addEventListener('click', () => {
       setPath(c, b.dataset.noimg, '');

@@ -19,6 +19,7 @@ const state = {
   view: 'menu',
   menuIndex: 0,
   personIndex: 0,
+  ikFilter: '',        // Interkomm: Filter nach Funktion ('' = alle)
   buffer: '',
   busy: false,
   typing: null,
@@ -365,36 +366,74 @@ function showMap(topic) {
 
 // ---------- Interkom ----------
 
+// Interkomm: Personen alphabetisch nach Nachnamen, optional nach Funktion gefiltert
+const up = (t) => String(t ?? '').toUpperCase();
+const surname = (name) => up(name).replace(/[^A-ZÄÖÜ0-9 -]/g, ' ').trim().split(/\s+/).pop() || '';
+const ikRoles = () => [...new Set(PERSONNEL.map((p) => up(p.role).trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'de'));
+function ikOrder() {
+  return PERSONNEL.map((p, i) => ({ p, i }))
+    .filter(({ p }) => !state.ikFilter || up(p.role).trim() === state.ikFilter)
+    .sort((a, b) => surname(a.p.name).localeCompare(surname(b.p.name), 'de') || up(a.p.name).localeCompare(up(b.p.name), 'de'))
+    .map(({ i }) => i);
+}
+
+function ikFilterStep(dir) {
+  const roles = ['', ...ikRoles()];
+  const k = roles.indexOf(state.ikFilter);
+  state.ikFilter = roles[(k + dir + roles.length) % roles.length];
+  sound.click();
+  showInterkom();
+}
+
 function showInterkom() {
   leave();
   state.view = 'interkom';
   setTitle('INTERKOMM', '3C ◂');
-  setHint('↑↓ WÄHLEN · *A* ANRUFEN · *B* NACHRICHT · ESC MENÜ');
+  setHint('↑↓ WÄHLEN · ←→ FUNKTION FILTERN · *A* ANRUFEN · *B* NACHRICHT · ESC MENÜ');
+  if (state.ikFilter && !ikRoles().includes(state.ikFilter)) state.ikFilter = '';
+  const order = ikOrder();
+  if (!order.includes(state.personIndex)) state.personIndex = order[0] ?? 0;
   view.innerHTML = `<div class="ik">
-      <ul class="ik-list">${PERSONNEL.map((p, i) => `<li data-i="${i}"><span class="k">${pad(i + 1)}</span><span>${esc(p.name)}</span></li>`).join('')}</ul>
+      <div class="ik-side">
+        <div class="ik-filter"><span class="ik-fbtn" data-f="-1">◂</span><span class="ik-ftext"><span class="dim">FUNKTION:</span> ${esc(state.ikFilter || 'ALLE')}</span><span class="ik-fbtn" data-f="1">▸</span></div>
+        <ul class="ik-list">${order.map((i, n) => `<li data-i="${i}"><span class="k">${pad(n + 1)}</span><span>${esc(up(PERSONNEL[i].name))}</span></li>`).join('') || '<li class="dim">KEINE PERSONEN</li>'}</ul>
+      </div>
       <section class="ik-profile"></section>
     </div>`;
-  view.querySelectorAll('.ik-list li').forEach((li) => {
+  view.querySelectorAll('.ik-list li[data-i]').forEach((li) => {
     li.addEventListener('click', () => { state.personIndex = +li.dataset.i; renderProfile(); });
   });
-  renderProfile();
+  view.querySelectorAll('.ik-fbtn').forEach((b) => b.addEventListener('click', () => ikFilterStep(Number(b.dataset.f))));
+  view.querySelector('.ik-ftext').addEventListener('click', () => ikFilterStep(1));
+  if (order.length) renderProfile();
 }
 
+// Porträt: Bildausschnitt (Zoom/Position) aus dem Editor, sonst automatisch füllend, oben ausgerichtet
 function portrait(p) {
-  if (p.image) return `<img src="${esc(p.image)}" alt="">`;
+  if (p.image) {
+    const c = p.crop;
+    const size = c ? `${Number(c.z) || 100}% auto` : 'cover';
+    const pos = c ? `${c.x ?? 50}% ${c.y ?? 0}%` : '50% 15%';
+    return `<div class="pimg" style="background-image:url(&quot;${esc(p.image)}&quot;);background-size:${size};background-position:${pos}"></div>`;
+  }
   return `<svg viewBox="0 0 100 120" class="noimg"><circle cx="50" cy="44" r="21"/><path d="M12 120 C12 88 30 76 50 76 C70 76 88 88 88 120"/></svg>
     <span class="noimg-t">NO IMAGE DATA</span>`;
 }
 
 function renderProfile() {
-  view.querySelectorAll('.ik-list li').forEach((li, i) => li.classList.toggle('sel', i === state.personIndex));
+  view.querySelectorAll('.ik-list li[data-i]').forEach((li) => {
+    const on = +li.dataset.i === state.personIndex;
+    li.classList.toggle('sel', on);
+    if (on) li.scrollIntoView({ block: 'nearest' });
+  });
   const p = PERSONNEL[state.personIndex];
+  if (!p) return;
   $('.ik-profile', view).innerHTML = `
     <div class="portrait">${portrait(p)}</div>
     <div class="pdata">
-      <div class="prow"><span class="dim">NAME</span><span>${esc(p.name)}</span></div>
-      <div class="prow"><span class="dim">FUNKTION</span><span>${esc(p.role)}</span></div>
-      <div class="prow"><span class="dim">STANDORT</span><span>${colorize(p.location)}</span></div>
+      <div class="prow"><span class="dim">NAME</span><span>${esc(up(p.name))}</span></div>
+      <div class="prow"><span class="dim">FUNKTION</span><span>${esc(up(p.role))}</span></div>
+      <div class="prow"><span class="dim">STANDORT</span><span>${colorize(up(p.location))}</span></div>
       <div class="prow"><span class="dim">STATUS</span><span class="${p.available ? 'mint' : 'crit'}">${p.available ? 'VERFÜGBAR' : 'NICHT ERREICHBAR'}</span></div>
       <div class="pactions">
         <span class="act" data-a="call"><span class="k">[A]</span> ANRUFEN</span>
@@ -423,7 +462,7 @@ async function startChat(mode) {
   view.innerHTML = `<div class="chat">
       <div class="chat-head">
         <div class="mini-portrait">${portrait(p)}</div>
-        <div><div class="chat-name">${esc(p.name)}</div><div class="dim">${esc(p.role)} // ${colorize(p.location)}</div></div>
+        <div><div class="chat-name">${esc(up(p.name))}</div><div class="dim">${esc(up(p.role))} // ${colorize(up(p.location))}</div></div>
       </div>
       <div class="chat-log"></div>
       <div class="chat-note">PROTOTYP: ANTWORTEN WERDEN SIMULIERT</div>
@@ -611,8 +650,9 @@ function openMessage(i) {
   setHint('↑↓ BLÄTTERN · ESC LISTE');
   const person = PERSONNEL.find((p) => p.name && normalize(p.name) === normalize(m.from || ''));
   const image = m.image || person?.image || '';
+  const crop = m.image ? null : person?.crop;
   view.innerHTML = `<div class="msg-view">
-      <div class="portrait">${portrait({ image })}</div>
+      <div class="portrait">${portrait({ image, crop })}</div>
       <div class="msg-body report">
         <div class="pdata">
           <div class="prow"><span class="dim">VON</span><span>${esc(m.from)}</span></div>
@@ -911,9 +951,13 @@ function nav(dir) {
   } else if (state.view === 'systems') {
     moveSys(0, dir);
   } else if (state.view === 'interkom') {
-    state.personIndex = (state.personIndex + dir + PERSONNEL.length) % PERSONNEL.length;
-    renderProfile();
-    sound.click();
+    const order = ikOrder();
+    if (order.length) {
+      const k = Math.max(0, order.indexOf(state.personIndex));
+      state.personIndex = order[(k + dir + order.length) % order.length];
+      renderProfile();
+      sound.click();
+    }
   } else if (state.view === 'map' && state.map) {
     if (dir < 0) state.map.ascend();
     else state.map.descend();
@@ -980,8 +1024,9 @@ function submit() {
   if (state.view === 'interkom') {
     if (lower === 'a') return startChat('call');
     if (lower === 'b') return startChat('message');
-    if (/^\d+$/.test(lower) && PERSONNEL[+lower - 1]) {
-      state.personIndex = +lower - 1;
+    const order = ikOrder();
+    if (/^\d+$/.test(lower) && order[+lower - 1] != null) {
+      state.personIndex = order[+lower - 1];
       renderProfile();
       return;
     }
@@ -1046,6 +1091,11 @@ function onKey(e) {
       if (state.view === 'systems') {
         e.preventDefault();
         moveSys(e.key === 'ArrowLeft' ? -1 : 1, 0);
+        return;
+      }
+      if (state.view === 'interkom') {
+        e.preventDefault();
+        ikFilterStep(e.key === 'ArrowLeft' ? -1 : 1);
         return;
       }
       break;

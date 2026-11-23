@@ -211,13 +211,18 @@ body.crt .crt-overlay::after {
 
 /* ---------- Interkom ---------- */
 .ik { position: absolute; inset: 0; display: grid; grid-template-columns: 420px 1fr; }
-.ik-list { list-style: none; margin: 0; padding: 22px 18px; border-right: 3px solid var(--amber); display: grid; align-content: start; gap: 4px; }
+.ik-side { display: flex; flex-direction: column; min-height: 0; border-right: 3px solid var(--amber); }
+.ik-filter { display: flex; align-items: center; gap: 10px; padding: 14px 18px 8px; font-size: 15px; font-weight: 700; border-bottom: 2px solid var(--rust-2); }
+.ik-ftext { flex: 1; text-align: center; cursor: pointer; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ik-fbtn { color: var(--yellow); cursor: pointer; padding: 0 6px; font-size: 18px; }
+.ik-list { list-style: none; margin: 0; padding: 10px 18px 22px; display: grid; align-content: start; gap: 4px; overflow-y: auto; min-height: 0; flex: 1; scrollbar-width: thin; scrollbar-color: var(--amber-dim) transparent; }
 .ik-list li { display: flex; gap: 16px; padding: 6px 12px; font-size: 19px; font-weight: 700; cursor: pointer; }
 .ik-list .k { color: var(--yellow); }
 .ik-list li.sel { background: var(--yellow); color: var(--ink); text-shadow: none; }
 .ik-list li.sel .k { color: var(--ink); }
 .ik-profile { padding: 26px 34px; display: grid; grid-template-columns: 250px 1fr; gap: 34px; align-content: start; }
 .portrait { position: relative; width: 250px; height: 300px; border: 3px solid var(--amber); overflow: hidden; background: var(--panel); }
+.pimg { position: absolute; inset: 0; background-repeat: no-repeat; filter: grayscale(1) sepia(1) saturate(2.6) hue-rotate(-12deg) contrast(1.25) brightness(.85); image-rendering: pixelated; }
 .portrait img, .mini-portrait img { width: 100%; height: 100%; object-fit: cover; filter: grayscale(1) sepia(1) saturate(2.6) hue-rotate(-12deg) contrast(1.25) brightness(.85); image-rendering: pixelated; }
 .portrait::after, .mini-portrait::after { content: ''; position: absolute; inset: 0; background: repeating-linear-gradient(to bottom, transparent 0 2px, rgba(0, 0, 0, .35) 2px 4px); }
 .noimg { position: absolute; left: 15%; top: 14%; width: 70%; fill: none; stroke: var(--rust-2); stroke-width: 2.5; }
