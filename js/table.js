@@ -1,6 +1,6 @@
 // Spieltisch: GM-Karte (Laptop) und Spielerkarte (Fernseher/Beamer).
-// Tokens, Notizen, Motion-Tracker-Pings, aufgedeckte Türen und freigegebene Kameras liegen
-// im Browser (localStorage) und werden zwischen den Fenstern live abgeglichen.
+// Tokens, Notizen, Motion-Tracker-Pings, Piktogramme, aufgedeckte Türen und freigegebene Kameras
+// liegen im Browser (localStorage) und werden zwischen den Fenstern live abgeglichen.
 
 import { CONFIG } from './data.js';
 import { el, txt } from './svg.js';
@@ -8,41 +8,53 @@ import { drawStationPlan, roomName, roomCode, bbox } from './stationplan.js';
 import { loadLayer } from './layer.js';
 import { loadPlans, asLevel, levelNum, LAYER_FALLBACK, uid } from './plans.js';
 import { findEntry } from './roomlist.js';
+import { semioticById } from './semiotic.js';
 
 export const TABLE_KEY = 'apollo.table.v1';
 export const PING_MS = 20000;
 export const TOKEN_R = 14;                 // Radius in Karteneinheiten (≈ 1,4 m Durchmesser)
-export const KINDS = { pc: 'SPIELERCHARAKTER', npc: 'NSC', alien: 'ALIEN', other: 'SONSTIGES' };
+export const PICTO_SIZE = 24;
+export const KINDS = { pc: 'SC', npc: 'NSC', alien: 'XENO', other: 'SONSTIGE' };
 export const KIND_COLOR = { pc: '#3fa9f5', npc: '#e3cb5c', alien: '#e43a24', other: '#9a9a9a' };
 export { uid };
 
 const channel = typeof BroadcastChannel === 'function' ? new BroadcastChannel('apollo-table') : null;
 
 export function emptyTable() {
-  return { tokens: [], notes: [], pings: [], doors: {}, cams: {}, player: null };
+  return { tokens: [], notes: [], pings: [], pictos: [], pictoNames: {}, doors: {}, cams: {}, player: null, follow: false };
 }
 
 export function loadTable() {
   let t = null;
   try { t = JSON.parse(localStorage.getItem(TABLE_KEY) || 'null'); } catch { /* leer */ }
-  const e = emptyTable();
-  t = { ...e, ...(t || {}) };
-  for (const k of ['tokens', 'notes', 'pings']) if (!Array.isArray(t[k])) t[k] = [];
-  for (const k of ['doors', 'cams']) if (!t[k] || typeof t[k] !== 'object') t[k] = {};
+  t = { ...emptyTable(), ...(t || {}) };
+  for (const k of ['tokens', 'notes', 'pings', 'pictos']) if (!Array.isArray(t[k])) t[k] = [];
+  for (const k of ['doors', 'cams', 'pictoNames']) if (!t[k] || typeof t[k] !== 'object') t[k] = {};
   t.pings = t.pings.filter((p) => p.keep || Date.now() - p.t < PING_MS);
   return t;
 }
 
-export function saveTable(t) {
+// quiet: nur speichern, das andere Fenster nicht neu zeichnen lassen
+export function saveTable(t, quiet = false) {
   try { localStorage.setItem(TABLE_KEY, JSON.stringify(t)); } catch { return false; }
-  channel?.postMessage('changed');
+  if (!quiet) notifyChange();
   return true;
 }
+export const notifyChange = () => channel?.postMessage('changed');
 
-// Änderungen aus dem anderen Fenster (GM ↔ Spieler)
+// Ausschnitt live übertragen (Mitlaufen), ohne die Karte neu aufzubauen
+export const postView = (v) => channel?.postMessage({ type: 'view', levelId: v.levelId, vb: v.vb });
+export function onView(fn) {
+  channel?.addEventListener('message', (e) => { if (e.data?.type === 'view') fn(e.data); });
+}
+
+// Änderungen aus dem anderen Fenster (GM ↔ Spieler, Editor)
 export function onTableChange(fn) {
-  channel?.addEventListener('message', () => fn());
-  addEventListener('storage', (e) => { if (e.key === TABLE_KEY || (e.key || '').startsWith('apollo.map.') || e.key === 'apollo.plans.v1') fn(); });
+  channel?.addEventListener('message', (e) => { if (e.data === 'changed') fn(); });
+  addEventListener('storage', (e) => {
+    const k = e.key || '';
+    if (k === TABLE_KEY || k.startsWith('apollo.map.') || k === 'apollo.plans.v1' || k === 'apollo.roomlist.v1') fn();
+  });
 }
 
 // Alle Ebenen aller Karten (Reihenfolge wie im Editor)
@@ -53,24 +65,40 @@ export function allLevels() {
 
 export const startLevel = (levels) => levels.find((l) => l.terminal && levelNum(l.plan.name) === 0) || levels.find((l) => l.terminal) || levels[0];
 
-const esc = (s) => String(s ?? '');
+export const tableLayer = (lv) => loadLayer(lv.id, LAYER_FALLBACK[lv.id]);
 
-// Raumname für die Karte: Raumliste (falls verknüpft), sonst Kartendaten
-function roomLabel(lv, room, layer) {
-  let e = null;
-  try { e = findEntry({ levelId: lv.id, levelNo: levelNum(lv.plan.name), room, code: roomCode(room, layer), zone: '' }); } catch { /* ohne Raumliste */ }
-  return { code: String(e?.roomId || roomCode(room, layer)).toUpperCase(), name: String(e?.name || roomName(lv.plan, room, layer)).toUpperCase() };
+// Eintrag der Raumliste zu einem Raum (falls vorhanden)
+export function roomEntry(lv, room, layer) {
+  try { return findEntry({ levelId: lv.id, levelNo: levelNum(lv.plan.name), room, code: roomCode(room, layer), zone: '' }); } catch { return null; }
 }
+
+// Raum-ID und Name: Raumliste (falls verknüpft), sonst Kartendaten
+export function roomLabel(lv, room, layer) {
+  const e = roomEntry(lv, room, layer);
+  return { code: String(e?.roomId || roomCode(room, layer)).toUpperCase(), name: String(e?.name || roomName(lv.plan, room, layer)).toUpperCase(), entry: e };
+}
+
+export const pictoName = (t, sym) => t.pictoNames?.[sym] || semioticById(sym)?.de || '';
+
+// Umriss je Art: SC Kreis, NSC Quadrat, Xeno umgedrehtes Dreieck
+export function tokenShape(kind, r) {
+  if (kind === 'npc') { const s = r * 0.9; return { tag: 'rect', a: { x: -s, y: -s, width: s * 2, height: s * 2, rx: 1.5 } }; }
+  if (kind === 'alien') return { tag: 'path', a: { d: `M${-r * 1.2} ${-r * 0.8} L${r * 1.2} ${-r * 0.8} L0 ${r * 1.3} Z`, 'stroke-linejoin': 'round' } };
+  return { tag: 'circle', a: { r } };
+}
+
+const str = (s) => String(s ?? '');
 
 // Karte samt Spieltisch-Objekten zeichnen. mode: 'gm' | 'player'
 export function drawTable(svg, lv, t, mode) {
   svg.replaceChildren();
   const g = el('g', { class: `tt tt-${mode}` }, svg);
-  const layer = loadLayer(lv.id, LAYER_FALLBACK[lv.id]);
+  const layer = tableLayer(lv);
   const info = drawStationPlan(g, CONFIG, lv.plan, layer, { cams: true });
   const objs = info.plan.objects;
+  const defs = el('defs', {}, g);
 
-  // Türen: für Spieler grau, bis aufgedeckt (einzeln oder alle)
+  // Türen: für Spieler grau, bis die Farbe freigegeben ist
   const rev = t.doors[lv.id] || {};
   layer.doors.forEach((d) => {
     const n = objs[d.id];
@@ -92,18 +120,28 @@ export function drawTable(svg, lv, t, mode) {
     }
   });
 
-  // Raum-ID und Raumname in jedem Raum
+  // Raum-ID in jedem Raum (Raumnamen stehen nicht auf der Karte)
   const rl = el('g', { class: 'tt-rooms' }, g);
   lv.plan.rooms.forEach((room) => {
     const b = bbox(room.rects);
     const w = b[2] - b[0];
     const h = b[3] - b[1];
-    const { code, name } = roomLabel(lv, room, layer);
-    const fs = Math.max(5, Math.min(14, w / Math.max(6, name.length) * 1.5, h / 4));
-    const cx = (b[0] + b[2]) / 2;
-    const cy = (b[1] + b[3]) / 2;
-    txt(rl, cx, cy - fs * 0.15, name, 'tt-rname', { 'text-anchor': 'middle', style: `font-size:${fs.toFixed(1)}px` });
-    txt(rl, cx, cy + fs * 1.05, code, 'tt-rcode', { 'text-anchor': 'middle', style: `font-size:${(fs * 0.8).toFixed(1)}px` });
+    const { code } = roomLabel(lv, room, layer);
+    const fs = Math.max(5, Math.min(13, (w / Math.max(3, code.length)) * 1.3, h / 2.6));
+    txt(rl, (b[0] + b[2]) / 2, (b[1] + b[3]) / 2 + fs * 0.35, code, 'tt-rcode', { 'text-anchor': 'middle', style: `font-size:${fs.toFixed(1)}px` });
+  });
+
+  // Piktogramme (frei gesetzt)
+  const pg = el('g', { class: 'tt-pictos' }, g);
+  t.pictos.filter((p) => p.levelId === lv.id && (mode === 'gm' || p.visible)).forEach((p) => {
+    const s = semioticById(p.sym);
+    if (!s) return;
+    const size = Number(p.size) || PICTO_SIZE;
+    const ig = el('g', { class: `tt-picto${p.visible ? '' : ' gm-only'}`, 'data-picto': p.id, transform: `translate(${p.x} ${p.y})` }, pg);
+    el('title', {}, ig).textContent = pictoName(t, p.sym);
+    el('rect', { x: -size / 2 - 2, y: -size / 2 - 2, width: size + 4, height: size + 4, class: 'tt-pictobox' }, ig);
+    const inner = el('g', { transform: `translate(${-size / 2} ${-size / 2}) scale(${size / 100})` }, ig);
+    inner.innerHTML = s.svg;
   });
 
   // Notizen
@@ -111,7 +149,7 @@ export function drawTable(svg, lv, t, mode) {
   t.notes.filter((n) => n.levelId === lv.id && (mode === 'gm' || n.visible)).forEach((n) => {
     const ng = el('g', { class: `tt-note${n.visible ? '' : ' gm-only'}`, 'data-note': n.id, transform: `translate(${n.x} ${n.y})` }, nl);
     el('circle', { r: 5, class: 'tt-pin', fill: n.color || '#e3cb5c' }, ng);
-    const lines = esc(n.text).split('\n').slice(0, 6);
+    const lines = str(n.text).split('\n').slice(0, 6);
     const width = Math.max(...lines.map((l) => l.length), 4) * 5.6 + 12;
     el('rect', { x: 8, y: -9, width, height: lines.length * 11 + 8, rx: 2, class: 'tt-notebox', stroke: n.color || '#e3cb5c' }, ng);
     lines.forEach((l, i) => txt(ng, 14, 3 + i * 11, l, 'tt-notetext'));
@@ -119,33 +157,37 @@ export function drawTable(svg, lv, t, mode) {
 
   // Tokens
   const tl = el('g', { class: 'tt-tokens' }, g);
-  const defs = el('defs', {}, g);
   t.tokens.filter((k) => k.levelId === lv.id && (mode === 'gm' || !k.hidden)).forEach((k) => {
-    const r = TOKEN_R * (Number(k.size) || 1);
+    const sz = Number(k.size) || 1;
+    const r = TOKEN_R * sz;
+    const lab = Math.max(0.7, Math.min(1, sz));
     const color = k.color || KIND_COLOR[k.kind] || '#e3cb5c';
-    const tg = el('g', { class: `tt-token${k.hidden ? ' hidden' : ''}`, 'data-token': k.id, transform: `translate(${k.x} ${k.y})` }, tl);
+    const shape = tokenShape(k.kind, r);
+    const tg = el('g', { class: `tt-token k-${k.kind}${k.hidden ? ' hidden' : ''}`, 'data-token': k.id, transform: `translate(${k.x} ${k.y})` }, tl);
     if (k.img) {
       const cid = `tclip-${k.id}`;
       const cp = el('clipPath', { id: cid }, defs);
-      el('circle', { r }, cp);
-      el('circle', { r, fill: '#000' }, tg);
-      el('image', { href: k.img, x: -r, y: -r, width: r * 2, height: r * 2, preserveAspectRatio: 'xMidYMid slice', 'clip-path': `url(#${cid})` }, tg);
+      el(shape.tag, shape.a, cp);
+      el(shape.tag, { ...shape.a, fill: '#000' }, tg);
+      el('image', { href: k.img, x: -r * 1.2, y: -r * 1.2, width: r * 2.4, height: r * 2.4, preserveAspectRatio: 'xMidYMid slice', 'clip-path': `url(#${cid})` }, tg);
     } else {
-      el('circle', { r, fill: color, class: 'tt-tfill' }, tg);
-      const short = esc(k.short || k.name).replace(/[^A-Za-zÄÖÜäöü0-9]/g, '').slice(0, 2).toUpperCase();
-      txt(tg, 0, r * 0.32, short, 'tt-tshort', { 'text-anchor': 'middle', style: `font-size:${(r * 0.9).toFixed(1)}px` });
+      el(shape.tag, { ...shape.a, fill: color, class: 'tt-tfill' }, tg);
+      const short = str(k.short || k.name).replace(/[^A-Za-zÄÖÜäöü0-9]/g, '').slice(0, 2).toUpperCase();
+      const xeno = k.kind === 'alien';
+      txt(tg, 0, xeno ? -r * 0.05 : r * 0.32, short, 'tt-tshort', { 'text-anchor': 'middle', style: `font-size:${(r * (xeno ? 0.75 : 0.9)).toFixed(1)}px` });
     }
-    el('circle', { r, fill: 'none', stroke: color, 'stroke-width': 3, class: 'tt-ring' }, tg);
-    txt(tg, 0, r + 11, esc(k.name).toUpperCase(), 'tt-tname', { 'text-anchor': 'middle' });
+    el(shape.tag, { ...shape.a, fill: 'none', stroke: color, 'stroke-width': (3 * Math.min(1, sz)).toFixed(2), class: 'tt-ring' }, tg);
+    const ny = (k.kind === 'alien' ? r * 1.3 : r) + 4 + 7 * lab;
+    txt(tg, 0, ny, str(k.name).toUpperCase(), 'tt-tname', { 'text-anchor': 'middle', style: `font-size:${(10 * lab).toFixed(1)}px` });
   });
 
   // Motion-Tracker-Pings
   const pl = el('g', { class: 'tt-pings' }, g);
   t.pings.filter((p) => p.levelId === lv.id && (p.keep || Date.now() - p.t < PING_MS)).forEach((p) => {
-    const pg = el('g', { class: 'tt-ping', 'data-ping': p.id, transform: `translate(${p.x} ${p.y})` }, pl);
-    el('circle', { r: 26, class: 'tt-pwave' }, pg);
-    el('circle', { r: 26, class: 'tt-pwave w2' }, pg);
-    el('circle', { r: 7, class: 'tt-pdot' }, pg);
+    const pgr = el('g', { class: `tt-ping${p.keep ? ' keep' : ''}`, 'data-ping': p.id, transform: `translate(${p.x} ${p.y})` }, pl);
+    el('circle', { r: 26, class: 'tt-pwave' }, pgr);
+    el('circle', { r: 26, class: 'tt-pwave w2' }, pgr);
+    el('circle', { r: 7, class: 'tt-pdot' }, pgr);
   });
   return info;
 }

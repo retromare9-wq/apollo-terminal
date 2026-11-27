@@ -147,14 +147,30 @@ Beide Fenster nutzen denselben Browser-Speicher und gleichen sich live ab.
 
 1. Fernseher per HDMI anschließen und unter Windows mit **Win + P → Erweitern** einstellen.
 2. In der GM-Karte **SPIELERANSICHT ÖFFNEN** klicken. Das Fenster auf den Fernseher ziehen und dort **⛶ VOLLBILD** klicken.
-3. Ausschnitt und Ebene einstellen, dann **AUSSCHNITT AN SPIELER ▶** klicken. Erst dann ändert sich das Bild der Spieler.
+3. **AUSSCHNITT AN SPIELER ▶** schickt den aktuellen Ausschnitt. Mit **LIVE MITLAUFEN** folgt die Spielerkarte jedem Verschieben, Zoomen und Ebenenwechsel sofort.
 
-- **Tokens:** rechts in der Leiste vorab anlegen. Mögliche Angaben: Name, Kürzel, Art, Farbe, Bild/Porträt (runder Rahmen in der Farbe), Größe. Die Tokens bleiben gespeichert. Platziert werden sie per Rechtsklick → *Token hier platzieren*, verschoben per Ziehen. **Für Spieler versteckt** blendet einen Token auf dem Fernseher aus; auf der GM-Karte erscheint er halbtransparent.
-- **Notizen:** Rechtsklick → *Notiz hier*. Standardmäßig sieht sie nur der GM (gestrichelt); auf Wunsch lässt sie sich auf der Spielerkarte zeigen.
-- **Motion-Tracker-Pings:** Rechtsklick → *Ping* (rot pulsierend, verschwindet nach 20 s) oder *Ping (bleibt)*. Entfernen geht per Rechtsklick auf den Ping oder mit **PINGS ENTFERNEN**.
-- **Türen:** Auf der Spielerkarte sind Türen grau. Die echte Farbe deckt man per Rechtsklick auf eine Tür auf oder mit **TÜREN** für alle Türen der Ebene.
-- **Kameras:** Auf der Spielerkarte sind Kameras verborgen. Per Rechtsklick lassen sie sich einzeln zeigen.
-- Die Spielerkarte zeigt Raumname und Raum-ID (aus der Raumliste, falls verknüpft).
+**Bedienung:**
+- **Linksklick:** auswählen (Token, Notiz, Ping, Piktogramm, Tür, Kamera, Raum).
+- **Linksziehen:** Objekt verschieben.
+- **Rechte Maustaste ziehen:** Karte verschieben.
+- **Mausrad:** zoomen.
+- **Pfeiltasten:** Auswahl bewegen (mit Umschalt in größeren Schritten; Türen nur entlang der Wand).
+- **Entf:** Auswahl löschen (Tokens wandern in den Vorrat).
+- **Esc:** abbrechen.
+- **Setzen** startet man immer in der rechten Leiste (⌖). Danach wird der Mauszeiger zum Fadenkreuz, und ein Klick auf die Karte setzt das Objekt genau dort.
+
+**Menüs der rechten Leiste:**
+- **Tokens:** vorab anlegen und gespeichert lassen. Angaben: Name, Kürzel, Art, Farbe, Größe (0,5× bis 3×), optional ein Porträt. Die Liste lässt sich nach SC / NSC / Xenos filtern. Die Umrandung zeigt die Art: SC Kreis, NSC Quadrat, Xeno umgedrehtes Dreieck. **Für Spieler versteckt** blendet einen Token auf dem Fernseher aus.
+- **Pings:** Motion-Tracker-Ping, rot pulsierend. Er verschwindet nach 20 s; die Variante **bleibt** hält, bis du sie entfernst.
+- **Piktogramme:** Auswahl wie im Editor. Ein Klick setzt das Piktogramm, ein Rechtsklick in der Auswahl gibt ihm einen Namen (erscheint beim Darüberfahren). Pro Piktogramm wählst du, ob die Spieler es sehen.
+- **Türen:** neue Türen setzen (Grün/Orange/Rot), die Farbe ausgewählter Türen ändern oder sie löschen. Pro Tür wählst du, ob die Spieler ihre Farbe sehen; standardmäßig sind Türen für sie grau.
+- **Kameras:** neue Kameras setzen, Richtung und Reichweite einstellen, löschen. Pro Kamera wählst du, ob die Spieler sie sehen; standardmäßig sind Kameras für sie verborgen.
+- **Notizen:** setzen; auf Wunsch auch auf der Spielerkarte zeigen.
+- **Räume:** durchsuchbare Liste mit Code und Name. Ein Klick (oder ein Klick auf den Raum in der Karte) öffnet das Raummenü. **⤢** öffnet es groß, **✎** bearbeitet es. Die Felder sind dieselben wie im Editor: Raumliste, Beschreibung, Gegenstände, Karte & Terminal, Piktogramme. **ALLE RÄUME AUF CLUTTERED** setzt alle offenen Einträge der Raumliste auf Cluttered.
+
+Türen, Kameras und Raumdaten sind dieselben Daten wie im Editor und im Terminal.
+
+Auf beiden Karten stehen in den Räumen nur die Raum-Codes; die Bereichsnamen stehen außerhalb der Räume.
 
 ## Sounds
 
