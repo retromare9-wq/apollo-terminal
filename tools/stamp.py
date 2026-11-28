@@ -24,4 +24,23 @@ for page in ('index.html', 'editor.html', 'gm.html', 'spieler.html'):
     s = re.sub(r'(<script type="module" src="js/(?:app|editor|gm|player)\.js)(\?v=[^"]*)?"', rf'\1?v={ver}"', s)
     s = re.sub(r'(href="css/[a-z]+\.css)(\?v=[^"]*)?"', rf'\1?v={ver}"', s)
     f.write_text(s, encoding='utf-8')
+
+# Offline-Betrieb: Service Worker mit Version und Dateiliste, Anmeldung in jeder Seite
+pages = ['index.html', 'editor.html', 'gm.html', 'spieler.html']
+files = ['./'] + pages + [f'css/{p.name}?v={ver}' for p in sorted((root / 'css').glob('*.css'))] \
+    + [f'js/{p.name}?v={ver}' for p in mods] + ['sounds/sounds.json']
+sw = root / 'sw.js'
+t = sw.read_text(encoding='utf-8')
+t = re.sub(r"^const VERSION = .*$", f"const VERSION = '{ver}';", t, count=1, flags=re.M)
+t = re.sub(r"^const FILES = .*$", 'const FILES = ' + json.dumps(files, separators=(',', ':')) + ';', t, count=1, flags=re.M)
+sw.write_text(t, encoding='utf-8')
+reg = ('<script id="apollo-sw">if (\'serviceWorker\' in navigator && location.protocol !== \'file:\') '
+       'addEventListener(\'load\', () => { navigator.serviceWorker.register(\'sw.js\').catch(() => {}); '
+       'navigator.serviceWorker.ready.then(() => document.documentElement.classList.add(\'offline-ready\')); });</script>')
+for page in pages:
+    f = root / page
+    s2 = f.read_text(encoding='utf-8')
+    s2 = re.sub(r'<script id="apollo-sw">.*?</script>\n?', '', s2, flags=re.S)
+    s2 = s2.replace('</head>', f'  {reg}\n</head>', 1)
+    f.write_text(s2, encoding='utf-8')
 print('version', ver)

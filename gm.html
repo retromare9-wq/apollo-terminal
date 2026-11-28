@@ -7,8 +7,8 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="css/apollo.css?v=79f8d04892">
-  <link rel="stylesheet" href="css/table.css?v=79f8d04892">
+  <link rel="stylesheet" href="css/apollo.css?v=378d517bec">
+  <link rel="stylesheet" href="css/table.css?v=378d517bec">
   <script>
     // Startwächter: Lädt der Code nicht (z. B. alte Dateien im Browser-Cache), Hinweis statt leerer Seite
     (function () {
@@ -26,7 +26,8 @@
       addEventListener('load', function () { setTimeout(function () { show('Startzeit überschritten'); }, 6000); });
     })();
   </script>
-              <script type="importmap" id="apollo-version">{"imports":{"./js/app.js":"./js/app.js?v=79f8d04892","./js/boot.js":"./js/boot.js?v=79f8d04892","./js/content-editor.js":"./js/content-editor.js?v=79f8d04892","./js/content.js":"./js/content.js?v=79f8d04892","./js/data.js":"./js/data.js?v=79f8d04892","./js/editor.js":"./js/editor.js?v=79f8d04892","./js/equipment-data.js":"./js/equipment-data.js?v=79f8d04892","./js/equipment.js":"./js/equipment.js?v=79f8d04892","./js/gm.js":"./js/gm.js?v=79f8d04892","./js/layer.js":"./js/layer.js?v=79f8d04892","./js/logo.js":"./js/logo.js?v=79f8d04892","./js/maps.js":"./js/maps.js?v=79f8d04892","./js/matcher.js":"./js/matcher.js?v=79f8d04892","./js/odt.js":"./js/odt.js?v=79f8d04892","./js/plans.js":"./js/plans.js?v=79f8d04892","./js/player.js":"./js/player.js?v=79f8d04892","./js/roomlist.js":"./js/roomlist.js?v=79f8d04892","./js/semiotic.js":"./js/semiotic.js?v=79f8d04892","./js/sound.js":"./js/sound.js?v=79f8d04892","./js/starmap-data.js":"./js/starmap-data.js?v=79f8d04892","./js/starmap.js":"./js/starmap.js?v=79f8d04892","./js/station-layer0.js":"./js/station-layer0.js?v=79f8d04892","./js/station-level0.js":"./js/station-level0.js?v=79f8d04892","./js/stationplan.js":"./js/stationplan.js?v=79f8d04892","./js/svg.js":"./js/svg.js?v=79f8d04892","./js/sync.js":"./js/sync.js?v=79f8d04892","./js/table.js":"./js/table.js?v=79f8d04892"}}</script>
+                    <script type="importmap" id="apollo-version">{"imports":{"./js/app.js":"./js/app.js?v=378d517bec","./js/boot.js":"./js/boot.js?v=378d517bec","./js/content-editor.js":"./js/content-editor.js?v=378d517bec","./js/content.js":"./js/content.js?v=378d517bec","./js/data.js":"./js/data.js?v=378d517bec","./js/editor.js":"./js/editor.js?v=378d517bec","./js/equipment-data.js":"./js/equipment-data.js?v=378d517bec","./js/equipment.js":"./js/equipment.js?v=378d517bec","./js/gm.js":"./js/gm.js?v=378d517bec","./js/layer.js":"./js/layer.js?v=378d517bec","./js/logo.js":"./js/logo.js?v=378d517bec","./js/maps.js":"./js/maps.js?v=378d517bec","./js/matcher.js":"./js/matcher.js?v=378d517bec","./js/odt.js":"./js/odt.js?v=378d517bec","./js/plans.js":"./js/plans.js?v=378d517bec","./js/player.js":"./js/player.js?v=378d517bec","./js/roomlist.js":"./js/roomlist.js?v=378d517bec","./js/semiotic.js":"./js/semiotic.js?v=378d517bec","./js/sound.js":"./js/sound.js?v=378d517bec","./js/starmap-data.js":"./js/starmap-data.js?v=378d517bec","./js/starmap.js":"./js/starmap.js?v=378d517bec","./js/station-layer0.js":"./js/station-layer0.js?v=378d517bec","./js/station-level0.js":"./js/station-level0.js?v=378d517bec","./js/stationplan.js":"./js/stationplan.js?v=378d517bec","./js/svg.js":"./js/svg.js?v=378d517bec","./js/sync.js":"./js/sync.js?v=378d517bec","./js/table.js":"./js/table.js?v=378d517bec"}}</script>
+  <script id="apollo-sw">if ('serviceWorker' in navigator && location.protocol !== 'file:') addEventListener('load', () => { navigator.serviceWorker.register('sw.js').catch(() => {}); navigator.serviceWorker.ready.then(() => document.documentElement.classList.add('offline-ready')); });</script>
 </head>
 <body class="table-page gm-page">
   <header class="gm-top">
@@ -37,6 +38,7 @@
     <label class="gm-follow" title="Spielerkarte folgt jedem Verschieben, Zoomen und Ebenenwechsel sofort"><input type="checkbox" id="follow"> LIVE MITLAUFEN</label>
     <span id="laser-state" class="gm-laser" hidden>● LASER</span>
     <span id="pstate" class="gm-pstate"></span>
+    <span class="gm-offline" title="Alle Dateien sind im Browser gespeichert – die App funktioniert auch ohne Internet">✓ OFFLINE BEREIT</span>
     <a class="btn" href="editor.html" target="apollo-editor">EDITOR ↗</a>
   </header>
   <main class="gm-main">
@@ -46,6 +48,6 @@
   <aside id="side" class="gm-side"></aside>
   <div id="roomwin" class="gm-modal" hidden></div>
   <div id="toast" class="gm-toast" hidden></div>
-  <script type="module" src="js/gm.js?v=79f8d04892"></script>
+  <script type="module" src="js/gm.js?v=378d517bec"></script>
 </body>
 </html>

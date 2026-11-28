@@ -174,6 +174,15 @@ Türen, Kameras und Raumdaten sind dieselben Daten wie im Editor und im Terminal
 
 Auf beiden Karten stehen in den Räumen nur die Raum-Codes; die Bereichsnamen stehen außerhalb der Räume.
 
+## Offline benutzen
+
+Die App speichert beim ersten Öffnen alle Dateien im Browser (Service Worker): Terminal, Editor, GM-Karte und Spielerkarte. Dafür muss eine beliebige Seite **einmal online** geöffnet werden.
+- Danach funktioniert alles **ohne Internet**, im selben Browser auf demselben Gerät.
+- Die GM-Karte zeigt dann oben **✓ OFFLINE BEREIT**.
+- Die Daten (Karten, Tokens, Raumliste, Texte) liegen ohnehin im Browser.
+- Nur der Abgleich der Raumliste mit der Handy-App braucht Internet.
+- Updates kommen automatisch, sobald man wieder online ist und die Seite neu lädt.
+
 ## Sounds
 
 Alle Klänge werden in [`js/sound.js`](js/sound.js) synthetisch erzeugt. Eigene Dateien kommen in
