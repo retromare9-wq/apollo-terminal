@@ -8,7 +8,7 @@ import { saveLayer, snapDoor, SECURITY, CAM, STATUS, MAX_PICTOS, roomDoors, room
 import { SEMIOTIC, semioticSvg, semioticById } from './semiotic.js';
 import { equipmentList } from './equipment.js';
 import {
-  roomSync, roomListEmpty, roomListEntries, updateEntry, addEntry, mapLinkOf, LIST_TEXT_FIELDS, TERMINAL_PICTO, onRoomListChange,
+  roomSync, roomListEmpty, roomListEntries, updateEntry, addEntry, mapLinkOf, LIST_TEXT_FIELDS, TERMINAL_PICTO, onRoomListChange, levelClash, areaClash,
 } from './roomlist.js';
 import { levelNum } from './plans.js';
 import {
@@ -380,10 +380,50 @@ function roomsHtml() {
     if (st.big) return `<div class="gm-btns"><button data-act="rback">← ALLE RÄUME</button></div><p class="gm-note">Raum ist im großen Fenster geöffnet.</p><div class="gm-btns"><button data-act="rbig">IN DER LEISTE ZEIGEN</button></div>`;
     return `<div class="gm-btns"><button data-act="rback">← ALLE RÄUME</button></div>${roomPanel(room, false)}`;
   }
+  if (st.roomCheck) return roomCheckHtml();
   const open = roomListEntries().filter((e) => !isCluttered(e)).length;
-  return `<input class="gm-search" id="room-q" placeholder="SUCHEN: CODE ODER NAME" value="${esc(st.roomQ)}">
+  return `<div class="gm-btns"><button data-act="rcheck">ZUORDNUNG ZUR RAUMLISTE PRÜFEN</button></div>
+    <input class="gm-search" id="room-q" placeholder="SUCHEN: CODE ODER NAME" value="${esc(st.roomQ)}">
     <div class="gm-rlist" id="room-list">${roomRows()}</div>
     ${open ? `<p class="gm-note">${open} Räume der Raumliste stehen auf OPEN.</p><div class="gm-btns"><button data-act="rclutter">ALLE RÄUME AUF CLUTTERED</button></div>` : ''}`;
+}
+
+// Räume dieser Ebene, deren Eintrag in der Raumliste nicht zu passen scheint
+function roomProblems() {
+  const no = levelNum(lv.plan.name);
+  const out = [];
+  const used = new Map();
+  lv.plan.rooms.forEach((room) => {
+    const e = roomEntry(lv, room, layer);
+    if (!e) return;
+    const zone = roomZone(lv.plan, room, layer);
+    if (areaClash(e, zone)) out.push({ room, e, why: `BEREICH AUF DER KARTE: ${zone}` });
+    used.set(e.id, [...(used.get(e.id) || []), room]);
+  });
+  used.forEach((rooms) => {
+    if (rooms.length < 2) return;
+    rooms.forEach((room) => { if (!out.some((x) => x.room === room)) out.push({ room, e: roomEntry(lv, room, layer), why: `EINTRAG GILT FÜR ${rooms.length} RÄUME` }); });
+  });
+  // feste Verknüpfungen auf diese Ebene von Einträgen einer anderen Ebene (werden ignoriert)
+  const stale = roomListEntries().filter((r) => String(r.mapLink || '').startsWith(`${lv.id}:`) && levelClash(r, no));
+  return { out, stale };
+}
+
+function roomCheckHtml() {
+  if (roomListEmpty()) return '<div class="gm-btns"><button data-act="rcheck">← ZURÜCK</button></div><p class="gm-note">Die Raumliste ist in diesem Browser nicht geladen.</p>';
+  const { out, stale } = roomProblems();
+  const entry = (e) => `${esc([e.area, e.subarea].filter(Boolean).join(' › ') || '–')} · ${esc(e.name || '–')} · EBENE ${esc(e.level ?? '–')}`;
+  return `<div class="gm-btns"><button data-act="rcheck">← ZURÜCK</button></div>
+    <p class="gm-note">Prüft ${esc(lv.plan.name)}: Räume, deren Eintrag in der Raumliste nicht zum Bereich auf der Karte passt.</p>
+    ${out.map(({ room, e, why }) => {
+      const linked = e.mapLink === mapLinkOf(lv.id, room);
+      return `<div class="gm-prob"><b>${esc(roomLabel(lv, room, layer).code)}</b> <span class="dim">${esc(why)}</span>
+        <div>RAUMLISTE: ${entry(e)}${linked ? ' <span class="dim">(FEST VERKNÜPFT)</span>' : ''}</div>
+        <div class="gm-btns">${linked ? `<button data-act="runlink" data-id="${esc(e.id)}">VERKNÜPFUNG LÖSEN</button>` : ''}<button data-act="sel" data-kind="room" data-id="${esc(room.id)}">ÖFFNEN</button></div></div>`;
+    }).join('') || '<p class="gm-ok">KEINE AUFFÄLLIGKEITEN AUF DIESER EBENE.</p>'}
+    ${stale.length ? `<div class="gm-sub">VERKNÜPFUNGEN VON ANDEREN EBENEN (WERDEN IGNORIERT)</div>
+      ${stale.map((e) => `<div class="gm-prob"><div>${entry(e)}</div><div class="gm-btns"><button data-act="runlink" data-id="${esc(e.id)}">VERKNÜPFUNG LÖSEN</button></div></div>`).join('')}
+      <div class="gm-btns"><button data-act="runlinkall">ALLE ${stale.length} LÖSEN</button></div>` : ''}`;
 }
 
 const titleCase = (s) => String(s || '').toLowerCase().replace(/(^|[\s\-/(])(\p{L})/gu, (_, a, b) => a + b.toUpperCase());
@@ -554,9 +594,12 @@ function action(b) {
     // Notizen
     case 'nplace': startPlace({ kind: 'note' }, 'NOTIZ'); return;
     // Räume
-    case 'rback': st.sel = null; st.big = false; render(); renderSide(); return;
+    case 'rback': st.roomCheck = false; st.sel = null; st.big = false; render(); renderSide(); return;
     case 'rbig': st.big = !st.big; renderSide(); return;
     case 'redit': st.roomEdit = !st.roomEdit; if (st.roomEdit) ensureEntry(o); renderSide(); return;
+    case 'rcheck': st.roomCheck = !st.roomCheck; renderSide(); return;
+    case 'runlink': updateEntry(b.dataset.id, { mapLink: '' }); render(); renderSide(); toast('VERKNÜPFUNG GELÖST'); return;
+    case 'runlinkall': roomProblems().stale.forEach((e) => updateEntry(e.id, { mapLink: '' })); render(); renderSide(); return;
     case 'rclutter': {
       const open = roomListEntries().filter((e) => !isCluttered(e));
       if (!confirm(`${open.length} Räume auf CLUTTERED setzen?`)) return;

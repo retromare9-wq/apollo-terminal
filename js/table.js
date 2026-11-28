@@ -4,7 +4,7 @@
 
 import { CONFIG } from './data.js';
 import { el, txt } from './svg.js';
-import { drawStationPlan, roomName, roomCode, bbox } from './stationplan.js';
+import { drawStationPlan, roomName, roomCode, roomZone, bbox } from './stationplan.js';
 import { loadLayer } from './layer.js';
 import { loadPlans, asLevel, levelNum, LAYER_FALLBACK, uid } from './plans.js';
 import { findEntry } from './roomlist.js';
@@ -69,7 +69,7 @@ export const tableLayer = (lv) => loadLayer(lv.id, LAYER_FALLBACK[lv.id]);
 
 // Eintrag der Raumliste zu einem Raum (falls vorhanden)
 export function roomEntry(lv, room, layer) {
-  try { return findEntry({ levelId: lv.id, levelNo: levelNum(lv.plan.name), room, code: roomCode(room, layer), zone: '' }); } catch { return null; }
+  try { return findEntry({ levelId: lv.id, levelNo: levelNum(lv.plan.name), room, code: roomCode(room, layer), zone: roomZone(lv.plan, room, layer) }); } catch { return null; }
 }
 
 // Raum-ID und Name: Raumliste (falls verknüpft), sonst Kartendaten

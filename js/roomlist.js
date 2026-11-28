@@ -71,6 +71,14 @@ export function addEntry(entry) {
 // ---------- Kopplung Karte ↔ Raumliste ----------
 
 const lc = (s) => String(s ?? '').trim().toLowerCase();
+// Ebene des Eintrags passt nicht zur Ebene der Karte (leere Angaben gelten als passend)
+export const levelClash = (r, levelNo) => levelNo != null && String(r.level ?? '').trim() !== '' && String(r.level).trim() !== String(levelNo);
+// Bereich des Eintrags passt nicht zum Bereich auf der Karte (nur wenn beide angegeben sind)
+export function areaClash(r, zone) {
+  const z = lc(zone);
+  const as = [r.area, r.subarea].map(lc).filter(Boolean);
+  return !!z && !!as.length && !as.some((a) => z.includes(a) || a.includes(z));
+}
 export const mapLinkOf = (levelId, room) => `${levelId}:${room.id}`;
 
 // Passender Eintrag für einen Raum der Karte: zuerst über die gespeicherte Verknüpfung,
@@ -79,7 +87,8 @@ export const mapLinkOf = (levelId, room) => `${levelId}:${room.id}`;
 export function findEntry({ levelId, levelNo, room, code, zone }) {
   const list = roomListEntries();
   const link = mapLinkOf(levelId, room);
-  const direct = list.find((r) => r.mapLink === link);
+  // Feste Verknüpfung – aber nicht, wenn der Eintrag laut Raumliste auf einer anderen Ebene liegt
+  const direct = list.find((r) => r.mapLink === link && !levelClash(r, levelNo));
   if (direct) return direct;
   if (levelNo == null) return null;
   const c = lc(code);

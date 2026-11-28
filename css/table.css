@@ -160,3 +160,7 @@ img.sh { border: 2px solid; object-fit: cover; }
 .tt-pdot { fill: #ff2b1e; filter: drop-shadow(0 0 4px #ff2b1e) drop-shadow(0 0 10px #ff2b1e); animation: ping-dot 1.6s ease-in-out infinite; }
 @keyframes ping-wave { 0% { transform: scale(.15); opacity: 1; } 100% { transform: scale(1); opacity: 0; } }
 @keyframes ping-dot { 0%, 100% { opacity: 1; } 50% { opacity: .55; } }
+
+.gm-prob { border: 1px solid var(--rust-2); padding: 6px 8px; font-size: 12px; display: flex; flex-direction: column; gap: 4px; }
+.gm-prob b { color: var(--yellow); }
+.gm-ok { color: var(--mint); font-weight: 700; font-size: 12px; }
