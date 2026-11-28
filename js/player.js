@@ -2,18 +2,20 @@
 // kommen von der GM-Karte („Ausschnitt an Spieler“ oder live beim Mitlaufen).
 import { loadContent } from './content.js';
 import { applyZoom } from './stationplan.js';
-import { loadTable, onTableChange, onView, drawTable, allLevels, startLevel, PING_MS } from './table.js';
+import { loadTable, onTableChange, onView, onLaser, placeLaser, drawTable, allLevels, startLevel, PING_MS } from './table.js';
 
 loadContent();
 const svg = document.querySelector('#map');
 let timer = 0;
 let shown = null;      // gezeichnete Ebene
 let live = null;       // zuletzt live empfangener Ausschnitt
+let laser = null;      // Laserpointer des GM
 
 function setView(vb) {
   svg.setAttribute('viewBox', `${vb.x} ${vb.y} ${vb.w} ${vb.h}`);
   const r = svg.getBoundingClientRect();
   applyZoom(svg, Math.max(vb.w / (r.width || 1600), vb.h / (r.height || 900)));
+  placeLaser(svg, laser?.levelId === shown ? laser : null);
 }
 
 function render() {
@@ -39,6 +41,7 @@ onView((v) => {
   if (v.levelId === shown) setView(v.vb); else render();
 });
 onTableChange(render);
+onLaser((l) => { laser = l; placeLaser(svg, l.levelId === shown ? l : null); });
 
 const full = document.querySelector('#pfull');
 full.addEventListener('click', () => {

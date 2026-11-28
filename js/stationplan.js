@@ -150,7 +150,7 @@ export function drawStationPlan(g, cfg, level, layer, opts = {}) {
         const s = semioticById(p.id);
         if (!s) return;
         const x = b[2] - 4 - (pics.length - i) * (size + 3) + 3;
-        const ig = el('g', { transform: `translate(${x} ${b[1] + 4}) scale(${size / 100})`, class: 'st-picto' }, labelLayer);
+        const ig = el('g', { transform: `translate(${x} ${b[1] + 4}) scale(${size / 100})`, class: 'st-picto', 'data-room': room.id, 'data-pid': p.id }, labelLayer);
         ig.innerHTML = s.svg;
       });
     }

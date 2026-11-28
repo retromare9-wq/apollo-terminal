@@ -97,8 +97,9 @@
 .gm-trow { display: grid !important; grid-template-columns: 24px 1fr auto; gap: 8px; align-items: center; text-align: left; padding: 4px 8px !important; }
 .sh { width: 20px; height: 20px; display: block; border-radius: 50%; }
 img.sh { border: 2px solid; object-fit: cover; }
-.sh.sh-npc { border-radius: 2px; }
-.sh.sh-alien { border-radius: 0; clip-path: polygon(0 8%, 100% 8%, 50% 100%); border: 0; }
+.sh.sh-square { border-radius: 2px; }
+.sh.sh-tri { border-radius: 0; clip-path: polygon(0 8%, 100% 8%, 50% 100%); border: 0; }
+.sh.sh-hex { border-radius: 0; clip-path: polygon(25% 3%, 75% 3%, 100% 50%, 75% 97%, 25% 97%, 0 50%); border: 0; }
 .sh.cam { background: var(--mint); }
 .gm-img .sh { width: 48px; height: 48px; border-width: 3px; }
 .gm-trow .pic { line-height: 0; }
@@ -165,3 +166,21 @@ img.sh { border: 2px solid; object-fit: cover; }
 .gm-prob b { color: var(--yellow); }
 .gm-ok { color: var(--mint); font-weight: 700; font-size: 12px; }
 .gm-sub.gm-bad { color: var(--red); }
+
+/* Gruppen */
+.table-page .gm-trow.member { margin-left: 18px; grid-template-columns: 12px 20px 1fr auto; }
+.table-page .gm-mrow { display: flex; gap: 8px; align-items: center; text-align: left; }
+.tt-badge { fill: #0a0604; stroke: #fff; stroke-width: 1.2; }
+.tt-badget { fill: #fff; font-weight: 700; pointer-events: none; }
+
+/* Raum-Piktogramme, die die Spieler nicht sehen */
+.tt-gm .st-picto.pic-off { opacity: .4; }
+
+/* Laserpointer */
+.gm-laser { color: #ff2b1e; font-weight: 700; font-size: 13px; text-shadow: 0 0 6px #ff2b1e; animation: ping-dot 1s ease-in-out infinite; }
+.gm-main svg#map.lasering, .gm-main svg#map.lasering * { cursor: none !important; }
+.tt-laser { pointer-events: none; }
+.tt-lglow { fill: rgba(255, 30, 20, .22); animation: laser-glow 1.1s ease-in-out infinite; transform-box: fill-box; transform-origin: center; }
+.tt-lring { fill: rgba(255, 40, 30, .35); stroke: #ff4a3a; stroke-width: 1.5; }
+.tt-lcore { fill: #fff1ee; filter: drop-shadow(0 0 3px #ff2b1e) drop-shadow(0 0 8px #ff2b1e); }
+@keyframes laser-glow { 0%, 100% { transform: scale(.85); opacity: .9; } 50% { transform: scale(1.15); opacity: .55; } }

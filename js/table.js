@@ -14,14 +14,20 @@ export const TABLE_KEY = 'apollo.table.v1';
 export const PING_MS = 20000;
 export const TOKEN_R = 14;                 // Radius in Karteneinheiten (≈ 1,4 m Durchmesser)
 export const PICTO_SIZE = 24;
-export const KINDS = { pc: 'SC', npc: 'NSC', alien: 'XENO', other: 'SONSTIGE' };
-export const KIND_COLOR = { pc: '#3fa9f5', npc: '#e3cb5c', alien: '#e43a24', other: '#9a9a9a' };
+export const KINDS = {
+  pc: 'SC', npc: 'NSC', cultcore: 'KERNKULT', cult: 'KULT', prisks: 'GEF. IN KS', prislh: 'GEF. IN LH',
+  alien: 'XENO', other: 'SONSTIGE', group: 'GRUPPE',
+};
+export const KIND_COLOR = {
+  pc: '#3fa9f5', npc: '#e3cb5c', cultcore: '#a63de0', cult: '#d38cf5', prisks: '#ff8c2a', prislh: '#2ad1c9',
+  alien: '#e43a24', other: '#9a9a9a', group: '#f2f2f2',
+};
 export { uid };
 
 const channel = typeof BroadcastChannel === 'function' ? new BroadcastChannel('apollo-table') : null;
 
 export function emptyTable() {
-  return { tokens: [], notes: [], pings: [], pictos: [], pictoNames: {}, doors: {}, cams: {}, player: null, follow: false };
+  return { tokens: [], notes: [], pings: [], pictos: [], pictoNames: {}, rpics: {}, doors: {}, cams: {}, player: null, follow: false };
 }
 
 export function loadTable() {
@@ -29,7 +35,7 @@ export function loadTable() {
   try { t = JSON.parse(localStorage.getItem(TABLE_KEY) || 'null'); } catch { /* leer */ }
   t = { ...emptyTable(), ...(t || {}) };
   for (const k of ['tokens', 'notes', 'pings', 'pictos']) if (!Array.isArray(t[k])) t[k] = [];
-  for (const k of ['doors', 'cams', 'pictoNames']) if (!t[k] || typeof t[k] !== 'object') t[k] = {};
+  for (const k of ['doors', 'cams', 'pictoNames', 'rpics']) if (!t[k] || typeof t[k] !== 'object') t[k] = {};
   t.pings = t.pings.filter((p) => p.keep || Date.now() - p.t < PING_MS);
   return t;
 }
@@ -44,6 +50,31 @@ export const notifyChange = () => channel?.postMessage('changed');
 
 // Ausschnitt live übertragen (Mitlaufen), ohne die Karte neu aufzubauen
 export const postView = (v) => channel?.postMessage({ type: 'view', levelId: v.levelId, vb: v.vb });
+// Laserpointer: leuchtender Punkt, Größe unabhängig vom Zoom
+export function laserNode(svg) {
+  let n = svg.querySelector(':scope > .tt-laser');
+  if (!n) {
+    n = el('g', { class: 'tt-laser', style: 'display:none' }, svg);
+    el('circle', { r: 18, class: 'tt-lglow' }, n);
+    el('circle', { r: 9, class: 'tt-lring' }, n);
+    el('circle', { r: 4.5, class: 'tt-lcore' }, n);
+  }
+  return n;
+}
+export function placeLaser(svg, l) {
+  const n = laserNode(svg);
+  if (!l?.on || l.x == null) { n.style.display = 'none'; return; }
+  const vb = svg.viewBox.baseVal;
+  const r = svg.getBoundingClientRect();
+  const k = vb && vb.width ? Math.max(vb.width / (r.width || 1), vb.height / (r.height || 1)) : 1;
+  n.setAttribute('transform', `translate(${l.x} ${l.y}) scale(${k.toFixed(4)})`);
+  n.style.display = '';
+}
+// Laserpointer: Position live an die Spielerkarte
+export const postLaser = (l) => channel?.postMessage({ type: 'laser', ...l });
+export function onLaser(fn) {
+  channel?.addEventListener('message', (e) => { if (e.data?.type === 'laser') fn(e.data); });
+}
 export function onView(fn) {
   channel?.addEventListener('message', (e) => { if (e.data?.type === 'view') fn(e.data); });
 }
@@ -80,12 +111,24 @@ export function roomLabel(lv, room, layer) {
 
 export const pictoName = (t, sym) => t.pictoNames?.[sym] || semioticById(sym)?.de || '';
 
-// Umriss je Art: SC Kreis, NSC Quadrat, Xeno umgedrehtes Dreieck
+// Umriss je Art: SC Kreis, NSC (auch Kult und Gefangene) Quadrat, Xeno umgedrehtes Dreieck, Gruppe Sechseck
+export const SHAPE_OF = (kind) => (kind === 'pc' || kind === 'other' || !kind ? 'circle'
+  : kind === 'alien' ? 'tri' : kind === 'group' ? 'hex' : 'square');
 export function tokenShape(kind, r) {
-  if (kind === 'npc') { const s = r * 0.9; return { tag: 'rect', a: { x: -s, y: -s, width: s * 2, height: s * 2, rx: 1.5 } }; }
-  if (kind === 'alien') return { tag: 'path', a: { d: `M${-r * 1.2} ${-r * 0.8} L${r * 1.2} ${-r * 0.8} L0 ${r * 1.3} Z`, 'stroke-linejoin': 'round' } };
+  const sh = SHAPE_OF(kind);
+  if (sh === 'square') { const s = r * 0.9; return { tag: 'rect', a: { x: -s, y: -s, width: s * 2, height: s * 2, rx: 1.5 } }; }
+  if (sh === 'tri') return { tag: 'path', a: { d: `M${-r * 1.2} ${-r * 0.8} L${r * 1.2} ${-r * 0.8} L0 ${r * 1.3} Z`, 'stroke-linejoin': 'round' } };
+  if (sh === 'hex') {
+    const R = r * 1.12;
+    const pts = [0, 1, 2, 3, 4, 5].map((i) => { const a = (Math.PI / 3) * i; return `${(R * Math.cos(a)).toFixed(2)} ${(R * Math.sin(a)).toFixed(2)}`; });
+    return { tag: 'path', a: { d: `M${pts.join(' L')} Z`, 'stroke-linejoin': 'round' } };
+  }
   return { tag: 'circle', a: { r } };
 }
+export const groupMembers = (t, g) => t.tokens.filter((k) => k.group === g.id && k.id !== g.id);
+// Raum-Piktogramm für Spieler freigegeben?
+export const rpicKey = (roomId, pid) => `${roomId}:${pid}`;
+export const rpicShown = (t, levelId, roomId, pid) => !!t.rpics?.[levelId]?.[rpicKey(roomId, pid)];
 
 const str = (s) => String(s ?? '');
 
@@ -118,6 +161,12 @@ export function drawTable(svg, lv, t, mode) {
       if (mode === 'player') n.remove();
       else n.classList.add('cam-off');
     }
+  });
+
+  // Piktogramme der Räume (aus dem Editor): für Spieler nur freigegebene
+  g.querySelectorAll('.st-picto[data-room]').forEach((n) => {
+    if (rpicShown(t, lv.id, n.dataset.room, n.dataset.pid)) return;
+    if (mode === 'player') n.remove(); else n.classList.add('pic-off');
   });
 
   // Raum-ID in jedem Raum (Raumnamen stehen nicht auf der Karte)
@@ -177,6 +226,15 @@ export function drawTable(svg, lv, t, mode) {
       txt(tg, 0, xeno ? -r * 0.05 : r * 0.32, short, 'tt-tshort', { 'text-anchor': 'middle', style: `font-size:${(r * (xeno ? 0.75 : 0.9)).toFixed(1)}px` });
     }
     el(shape.tag, { ...shape.a, fill: 'none', stroke: color, 'stroke-width': (3 * Math.min(1, sz)).toFixed(2), class: 'tt-ring' }, tg);
+    if (k.kind === 'group') {
+      const ms = groupMembers(t, k);
+      el('title', {}, tg).textContent = `${k.name}: ${ms.map((m) => m.name).join(', ') || 'keine Mitglieder'}`;
+      if (ms.length) {
+        const bx = r * 0.95;
+        el('circle', { cx: bx, cy: -bx, r: Math.max(4, r * 0.42), class: 'tt-badge' }, tg);
+        txt(tg, bx, -bx + Math.max(4, r * 0.42) * 0.38, String(ms.length), 'tt-badget', { 'text-anchor': 'middle', style: `font-size:${(Math.max(4, r * 0.42) * 1.1).toFixed(1)}px` });
+      }
+    }
     const ny = (k.kind === 'alien' ? r * 1.3 : r) + 4 + 7 * lab;
     txt(tg, 0, ny, str(k.name).toUpperCase(), 'tt-tname', { 'text-anchor': 'middle', style: `font-size:${(10 * lab).toFixed(1)}px` });
   });

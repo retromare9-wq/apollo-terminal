@@ -14,6 +14,7 @@ import { levelNum } from './plans.js';
 import {
   loadTable, saveTable, notifyChange, postView, onTableChange, drawTable, allLevels, startLevel,
   roomLabel, roomEntry, pictoName, KINDS, KIND_COLOR, PING_MS, PICTO_SIZE, uid,
+  SHAPE_OF, groupMembers, rpicKey, rpicShown, postLaser, placeLaser,
 } from './table.js';
 
 loadContent();
@@ -41,8 +42,12 @@ const SECTIONS = [
   ['cams', 'KAMERAS'], ['notes', 'NOTIZEN'], ['rooms', 'RÄUME'],
 ];
 const KIND_SECTION = { token: 'tokens', ping: 'pings', picto: 'pictos', door: 'doors', cam: 'cams', note: 'notes', room: 'rooms' };
-const KIND_ORDER = ['pc', 'npc', 'alien', 'other'];
-const KIND_PLURAL = { pc: 'SPIELERCHARAKTERE', npc: 'NSC', alien: 'XENOS', other: 'SONSTIGE' };
+const KIND_ORDER = ['group', 'pc', 'npc', 'cultcore', 'cult', 'prisks', 'prislh', 'alien', 'other'];
+const KIND_PLURAL = {
+  group: 'GRUPPEN', pc: 'SPIELERCHARAKTERE', npc: 'NSC', cultcore: 'KERNKULT', cult: 'KULT',
+  prisks: 'GEFANGENE IN KS', prislh: 'GEFANGENE IN LH', alien: 'XENOS', other: 'SONSTIGE',
+};
+const KIND_TAB = { group: 'GRUPPEN', pc: 'SC', npc: 'NSC', cultcore: 'KERNKULT', cult: 'KULT', prisks: 'GEF. KS', prislh: 'GEF. LH', alien: 'XENOS', other: 'SONST.' };
 const SIZES = [0.5, 0.75, 1, 1.25, 1.5, 2, 3];
 
 // ---------- Ansicht ----------
@@ -52,6 +57,7 @@ function setVB(r) {
   st.vb = r;
   svg.setAttribute('viewBox', `${r.x} ${r.y} ${r.w} ${r.h}`);
   applyZoom(svg, r.w / (svg.clientWidth || 1000));
+  if (laser?.on) laserSend();
   if (t.follow && lv) {
     const v = { levelId: lv.id, vb: { ...r } };
     postView(v);
@@ -87,6 +93,7 @@ function render() {
   else if (s) svg.querySelector(`[data-${s.kind}="${s.id}"]`)?.classList.add('tt-sel');
   svg.classList.toggle('placing', !!st.place);
   setVB(st.vb);
+  placeLaser(svg, laserState());
   renderPlayerState();
   clearTimeout(pingTimer);
   const next = t.pings.filter((p) => !p.keep).map((p) => p.t + PING_MS - Date.now()).filter((ms) => ms > 0);
@@ -188,6 +195,7 @@ function doPlace(pt) {
   if (p.kind === 'token') {
     const k = findTok(p.id);
     if (!k) return;
+    if (k.group) { const g = findTok(k.group); k.group = null; toast(`${k.name} VERLÄSST DIE GRUPPE ${g?.name || ''}`); }
     Object.assign(k, { levelId: lv.id, x, y });
     st.sel = { kind: 'token', id: k.id };
   } else if (p.kind === 'note') {
@@ -243,24 +251,45 @@ function count(k) {
 }
 
 const chk = (f, label, on) => `<label class="gm-check"><input type="checkbox" data-f="${f}" ${on ? 'checked' : ''}> ${label}</label>`;
-const swatch = (k) => (k.img ? `<img class="sh sh-${k.kind}" src="${esc(k.img)}" alt="" style="border-color:${esc(k.color)}">` : `<i class="sh sh-${k.kind}" style="background:${esc(k.color || KIND_COLOR[k.kind])}"></i>`);
+const swatch = (k) => (k.img ? `<img class="sh sh-${SHAPE_OF(k.kind)}" src="${esc(k.img)}" alt="" style="border-color:${esc(k.color)}">` : `<i class="sh sh-${SHAPE_OF(k.kind)}" style="background:${esc(k.color || KIND_COLOR[k.kind])}"></i>`);
+const whereOf = (x) => (x.levelId ? (levels.find((l) => l.id === x.levelId)?.plan.name || '?') : 'VORRAT');
+const freeStock = () => t.tokens.filter((x) => !x.levelId && x.kind !== 'group' && !x.group).sort((a, b) => a.name.localeCompare(b.name, 'de'));
+
+function tokenRow(x, cur, member = false) {
+  const n = x.kind === 'group' ? groupMembers(t, x).length : 0;
+  return `<button class="gm-trow ${cur === x ? 'on' : ''} ${member ? 'member' : ''}" data-act="sel" data-kind="token" data-id="${x.id}">${member ? '<span class="dim">↳</span>' : ''}${swatch(x)}<span class="n">${esc(x.name)}${x.kind === 'group' ? ` <span class="dim">(${n})</span>` : ''}</span><span class="dim">${x.hidden ? 'VERSTECKT · ' : ''}${member ? 'IN GRUPPE' : esc(whereOf(x))}</span></button>`;
+}
+
+function groupHtml(g) {
+  const ms = groupMembers(t, g);
+  const free = freeStock();
+  return `<div class="gm-sub">MITGLIEDER (${ms.length})</div>
+    <div class="gm-tlist">${ms.map((m) => `<div class="gm-lrow"><button data-act="sel" data-kind="token" data-id="${m.id}" class="gm-mrow">${swatch(m)} ${esc(m.name)} <span class="dim">${esc(KINDS[m.kind] || '')}</span></button><button data-act="gout" data-id="${m.id}" class="danger" title="Aus der Gruppe nehmen (zurück in den Vorrat)">✕</button></div>`).join('') || '<p class="dim">Noch niemand in dieser Gruppe.</p>'}</div>
+    ${free.length ? `<label class="gm-f">+ TOKEN AUS DEM VORRAT HINZUFÜGEN <select data-gadd><option value="">– TOKEN WÄHLEN –</option>${free.map((x) => `<option value="${x.id}">${esc(x.name)} (${esc(KINDS[x.kind] || '')})</option>`).join('')}</select></label>` : '<p class="gm-note">Keine freien Tokens im Vorrat.</p>'}`;
+}
 
 function tokensHtml() {
   const k = st.sel?.kind === 'token' ? selObj() : null;
   let form = '';
   if (k) {
     const here = k.levelId === lv.id;
+    const isGroup = k.kind === 'group';
+    const g = k.group ? findTok(k.group) : null;
     form = `<div class="gm-form">
+      ${isGroup ? '<div class="gm-sub">GRUPPEN-TOKEN</div>' : ''}
       <label class="gm-f">NAME <input data-f="name" value="${esc(k.name)}" maxlength="30"></label>
       <div class="gm-row">
         <label class="gm-f">KÜRZEL <input data-f="short" value="${esc(k.short)}" maxlength="2" placeholder="auto"></label>
         <label class="gm-f">FARBE <input type="color" data-f="color" value="${esc(k.color || KIND_COLOR[k.kind])}"></label>
         <label class="gm-f">GRÖSSE <select data-f="size">${SIZES.map((v) => `<option value="${v}" ${Number(k.size || 1) === v ? 'selected' : ''}>${v}×</option>`).join('')}</select></label>
       </div>
-      <label class="gm-f">ART <select data-f="kind">${Object.entries(KINDS).map(([v, l]) => `<option value="${v}" ${k.kind === v ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
+      ${isGroup ? '' : `<label class="gm-f">ART <select data-f="kind">${Object.entries(KINDS).filter(([v]) => v !== 'group').map(([v, l]) => `<option value="${v}" ${k.kind === v ? 'selected' : ''}>${l}</option>`).join('')}</select></label>`}
       ${chk('hidden', 'FÜR SPIELER VERSTECKT', k.hidden)}
       <div class="gm-img">${k.img ? swatch(k) : '<span class="dim">KEIN BILD</span>'}
         <button data-act="timg">BILD …</button>${k.img ? '<button data-act="tnoimg" class="danger">✕</button>' : ''}</div>
+      ${g ? `<p class="gm-note">IN DER GRUPPE <b>${esc(g.name)}</b>. Wird der Token einzeln auf die Karte gesetzt, verlässt er die Gruppe.</p>
+        <div class="gm-btns"><button data-act="sel" data-kind="token" data-id="${g.id}">ZUR GRUPPE</button><button data-act="gout" data-id="${k.id}">AUS GRUPPE NEHMEN</button></div>` : ''}
+      ${isGroup ? groupHtml(k) : ''}
       <div class="gm-btns">
         <button data-act="tplace" class="hot">⌖ ${here ? 'NEU PLATZIEREN' : 'AUF KARTE SETZEN'}</button>
         ${here ? '<button data-act="tstash">IN DEN VORRAT</button>' : ''}
@@ -268,19 +297,18 @@ function tokensHtml() {
         <button data-act="tdel" class="danger">LÖSCHEN</button>
       </div></div>`;
   }
-  const tabs = [['all', 'ALLE'], ['pc', 'SC'], ['npc', 'NSC'], ['alien', 'XENOS'], ['other', 'SONST.']]
+  const tabs = [['all', 'ALLE'], ...KIND_ORDER.map((v) => [v, KIND_TAB[v]])]
     .map(([v, l]) => `<button data-act="tfilter" data-v="${v}" class="${st.tokFilter === v ? 'on' : ''}">${l}</button>`).join('');
   const kinds = st.tokFilter === 'all' ? KIND_ORDER : [st.tokFilter];
   const list = kinds.map((kind) => {
-    const ks = t.tokens.filter((x) => (x.kind || 'npc') === kind).sort((a, b) => a.name.localeCompare(b.name, 'de'));
+    // Mitglieder stehen unter ihrer Gruppe (bei Filter nach Art auch einzeln)
+    const ks = t.tokens.filter((x) => (x.kind || 'npc') === kind && (!x.group || st.tokFilter !== 'all')).sort((a, b) => a.name.localeCompare(b.name, 'de'));
     if (!ks.length) return st.tokFilter === 'all' ? '' : '<p class="dim">Keine Tokens dieser Art.</p>';
-    return `${st.tokFilter === 'all' ? `<div class="gm-sub">${KIND_PLURAL[kind]}</div>` : ''}${ks.map((x) => {
-      const where = x.levelId ? (levels.find((l) => l.id === x.levelId)?.plan.name || '?') : 'VORRAT';
-      return `<button class="gm-trow ${k === x ? 'on' : ''}" data-act="sel" data-kind="token" data-id="${x.id}">${swatch(x)}<span class="n">${esc(x.name)}</span><span class="dim">${x.hidden ? 'VERSTECKT · ' : ''}${esc(where)}</span></button>`;
-    }).join('')}`;
+    return `${st.tokFilter === 'all' ? `<div class="gm-sub">${KIND_PLURAL[kind]}</div>` : ''}${ks.map((x) => tokenRow(x, k)
+      + (x.kind === 'group' ? groupMembers(t, x).map((m) => tokenRow(m, k, true)).join('') : '')).join('')}`;
   }).join('');
   return `${form}
-    <div class="gm-btns"><button data-act="tnew">+ NEUER TOKEN</button></div>
+    <div class="gm-btns"><button data-act="tnew">+ NEUER TOKEN</button><button data-act="gnew">+ NEUE GRUPPE</button></div>
     <div class="gm-tabs">${tabs}</div>
     <div class="gm-tlist">${list || '<p class="dim">Noch keine Tokens. Lege sie vorab an – sie bleiben gespeichert.</p>'}</div>`;
 }
@@ -303,8 +331,14 @@ function pictosHtml() {
       ${chk('visible', 'AUF DER SPIELERKARTE ZEIGEN', p.visible)}
       <div class="gm-btns"><button data-act="delsel" class="danger">LÖSCHEN</button></div></div>` : '';
   const placed = onLevel(t.pictos);
-  return `${form}
-    <p class="gm-note">Klick: Piktogramm setzen (Fadenkreuz) · Rechtsklick: Namen geben</p>
+  const roomPics = lv.plan.rooms.flatMap((r) => (layer.rooms[r.id]?.picto || []).filter((q) => q.map).map((q) => ({ r, q })));
+  const rpShown = roomPics.filter(({ r, q }) => rpicShown(t, lv.id, r.id, q.id)).length;
+  const roomPart = roomPics.length ? `<div class="gm-sub">PIKTOGRAMME DER RÄUME (AUS DEM EDITOR)</div>
+    <p class="gm-note">${rpShown} von ${roomPics.length} sind für die Spieler sichtbar. Einzeln umschalten: Raum anklicken.</p>
+    <div class="gm-btns"><button data-act="rpall">ALLE FÜR SPIELER ZEIGEN</button><button data-act="rpnone">ALLE VERBERGEN</button></div>` : '';
+  return `${form}${roomPart}
+    <div class="gm-sub">FREIE PIKTOGRAMME</div>
+    <p class="gm-note">Klick: Piktogramm setzen (Fadenkreuz) · Rechtsklick: Namen geben. Neue Piktogramme sind für die Spieler zunächst unsichtbar.</p>
     <div class="gm-palette">${SEMIOTIC.map((sm) => `<button class="gm-pal ${st.place?.sym === sm.id ? 'on' : ''}" data-act="gplace" data-v="${sm.id}" data-pal="${sm.id}" title="${esc(pictoName(t, sm.id))}">${semioticSvg(sm.id, 34)}</button>`).join('')}</div>
     ${placed.length ? `<div class="gm-sub">AUF DIESER EBENE</div><div class="gm-tlist">${placed.map((q) => `<button class="gm-trow ${p === q ? 'on' : ''}" data-act="sel" data-kind="picto" data-id="${q.id}"><span class="pic">${semioticSvg(q.sym, 20)}</span><span class="n">${esc(pictoName(t, q.sym))}</span><span class="dim">${q.visible ? 'SPIELER' : 'NUR GM'}</span></button>`).join('')}</div>` : ''}`;
 }
@@ -487,7 +521,8 @@ function roomViewHtml(room, e, d, pics) {
     : !e ? '<p class="gm-note">Noch kein Eintrag in der Raumliste – mit ✎ anlegen.</p>' : '';
   return `<div class="gm-rfacts">${facts}</div>
     ${d.info ? `<div class="gm-rf"><span class="dim">NOTIZ IM TERMINAL</span><p>${br(d.info)}</p></div>` : ''}
-    ${pics.length ? `<div class="gm-rpics">${pics.map((p) => `<span title="${esc(pictoName(t, p.id))}">${semioticSvg(p.id, 34)}</span>`).join('')}</div>` : ''}
+    ${pics.length ? `<div class="gm-sub">PIKTOGRAMME</div><div class="gm-tlist">${pics.map((p) => `<div class="gm-dpic">${semioticSvg(p.id, 34)}<div><b>${esc(pictoName(t, p.id))}</b>
+      ${p.map ? `<label class="gm-check"><input type="checkbox" data-rpv="${p.id}" ${rpicShown(t, lv.id, room.id, p.id) ? 'checked' : ''}> FÜR SPIELER SICHTBAR</label>` : '<span class="dim">NICHT AUF DER KARTE</span>'}</div></div>`).join('')}</div>` : ''}
     <div class="gm-rtexts">${texts || (e ? '<p class="dim">Noch keine Beschreibung.</p>' : '')}</div>${note}`;
 }
 
@@ -516,7 +551,8 @@ function roomEditHtml(room, e, d, pics) {
       <label class="gm-f">NOTIZ (ERSCHEINT IM TERMINAL) <textarea data-rk="info" maxlength="300" rows="3">${esc(d.info)}</textarea></label>
       <div class="gm-sub">PIKTOGRAMME (${pics.length}/${MAX_PICTOS})</div>
       <div class="gm-tlist">${pics.map((p, i) => `<div class="gm-dpic">${semioticSvg(p.id, 38)}<div><b>${esc(pictoName(t, p.id))}</b>
-        <label class="gm-check"><input type="checkbox" data-pmap="${i}" ${p.map ? 'checked' : ''}> AUF DER KARTE</label></div>
+        <label class="gm-check"><input type="checkbox" data-pmap="${i}" ${p.map ? 'checked' : ''}> AUF DER KARTE</label>
+        ${p.map ? `<label class="gm-check"><input type="checkbox" data-rpv="${p.id}" ${rpicShown(t, lv.id, room.id, p.id) ? 'checked' : ''}> FÜR SPIELER SICHTBAR</label>` : ''}</div>
         <button class="danger" data-act="rpdel" data-v="${i}">✕</button></div>`).join('') || '<p class="dim">Noch keine. Unten anklicken zum Hinzufügen.</p>'}</div>
       <div class="gm-palette">${SEMIOTIC.map((sm) => `<button class="gm-pal" data-act="rpadd" data-v="${sm.id}" data-pal="${sm.id}" title="${esc(pictoName(t, sm.id))}" ${pics.length >= MAX_PICTOS || pics.some((p) => p.id === sm.id) ? 'disabled' : ''}>${semioticSvg(sm.id, 30)}</button>`).join('')}</div>`;
   const texts = e ? `<div class="gm-sub">BESCHREIBUNG (RAUMLISTE)</div>
@@ -563,8 +599,17 @@ function action(b) {
     case 'sel': select(b.dataset.kind, b.dataset.id); centerIfOff(); return;
     case 'delsel': deleteSel(); return;
     // Tokens
+    case 'gnew': {
+      const g = { id: uid('t'), name: 'NEUE GRUPPE', kind: 'group', color: KIND_COLOR.group, size: 1.5, hidden: false, img: '', levelId: null, x: 0, y: 0 };
+      t.tokens.push(g);
+      st.sel = { kind: 'token', id: g.id };
+      commit();
+      side.querySelector('[data-f="name"]')?.select();
+      return;
+    }
+    case 'gout': { const m = findTok(b.dataset.id); if (m) m.group = null; commit(); return; }
     case 'tnew': {
-      const kind = st.tokFilter !== 'all' ? st.tokFilter : 'npc';
+      const kind = st.tokFilter !== 'all' && st.tokFilter !== 'group' ? st.tokFilter : 'npc';
       const k = { id: uid('t'), name: 'NEUER TOKEN', kind, color: KIND_COLOR[kind], size: 1, hidden: false, img: '', levelId: null, x: 0, y: 0 };
       t.tokens.push(k);
       st.sel = { kind: 'token', id: k.id };
@@ -576,7 +621,20 @@ function action(b) {
     case 'tplace': startPlace({ kind: 'token', id: o.id }, `${o.name} SETZEN`); return;
     case 'tstash': o.levelId = null; commit(); return;
     case 'tgoto': selectLevel(o.levelId); st.sel = { kind: 'token', id: o.id }; centerOn(o); render(); renderSide(); return;
-    case 'tdel': if (confirm(`Token „${o.name}“ endgültig löschen?`)) { t.tokens = t.tokens.filter((x) => x !== o); st.sel = null; commit(); } return;
+    case 'tdel':
+      if (!confirm(o.kind === 'group' ? `Gruppe „${o.name}“ löschen? Die Mitglieder kommen zurück in den Vorrat.` : `Token „${o.name}“ endgültig löschen?`)) return;
+      t.tokens.forEach((x) => { if (x.group === o.id) x.group = null; });
+      t.tokens = t.tokens.filter((x) => x !== o);
+      st.sel = null;
+      commit();
+      return;
+    case 'rpall': case 'rpnone': {
+      const m = {};
+      if (a === 'rpall') lv.plan.rooms.forEach((r) => (layer.rooms[r.id]?.picto || []).filter((q) => q.map).forEach((q) => { m[rpicKey(r.id, q.id)] = true; }));
+      t.rpics[lv.id] = m;
+      commit();
+      return;
+    }
     case 'tnoimg': o.img = ''; commit(); return;
     case 'timg': pickImage(o); return;
     // Pings
@@ -664,6 +722,21 @@ function onField(inp, changedEv) {
   if (room && inp.dataset.rk) {
     patchRoom(room.id, { [inp.dataset.rk]: inp.value });
     if (changed) { render(); renderSide(); }
+    return;
+  }
+  if (room && inp.dataset.rpv != null) {
+    if (!changed) return;
+    const m = (t.rpics[lv.id] = t.rpics[lv.id] || {});
+    const key = rpicKey(room.id, inp.dataset.rpv);
+    if (inp.checked) m[key] = true; else delete m[key];
+    commit();
+    return;
+  }
+  if (inp.dataset.gadd != null) {
+    if (!changed || !inp.value) return;
+    const g = selObj();
+    const m = findTok(inp.value);
+    if (g && m) { m.group = g.id; m.levelId = null; commit(); }
     return;
   }
   if (room && inp.dataset.pmap != null) {
@@ -784,12 +857,43 @@ function pickImage(o) {
   f.click();
 }
 
+// ---------- Laserpointer ----------
+// Mausrad-Taste gedrückt halten oder Shift kurz antippen (an/aus): Leuchtpunkt auch auf der Spielerkarte
+const laser = { on: false, src: null, pt: null, raf: 0 };
+const laserState = () => ({ on: laser.on && !!laser.pt, levelId: lv?.id, x: laser.pt?.x, y: laser.pt?.y });
+function laserSend() {
+  if (laser.raf) return;
+  laser.raf = requestAnimationFrame(() => {
+    laser.raf = 0;
+    const l = laserState();
+    postLaser(l);
+    placeLaser(svg, l);
+  });
+}
+function setLaser(on, src) {
+  laser.on = on;
+  laser.src = on ? src : null;
+  svg.classList.toggle('lasering', on);
+  $('#laser-state').hidden = !on;
+  laserSend();
+}
+let shiftAt = 0;
+let shiftOther = false;
+
 // ---------- Maus und Tastatur ----------
 
 const HIT = ['token', 'note', 'ping', 'picto', 'cam', 'door'];
 
 function onDown(e) {
-  if (e.button === 2 || e.button === 1) {
+  if (e.shiftKey) shiftOther = true;
+  if (e.button === 1) {
+    e.preventDefault();
+    laser.pt = toMap(e);
+    setLaser(true, 'mid');
+    svg.setPointerCapture(e.pointerId);
+    return;
+  }
+  if (e.button === 2) {
     e.preventDefault();
     st.drag = { type: 'pan', sx: e.clientX, sy: e.clientY, vb: { ...st.vb } };
     svg.classList.add('panning');
@@ -817,6 +921,8 @@ function onDown(e) {
 }
 
 function onMove(e) {
+  laser.pt = toMap(e);
+  if (laser.on) laserSend();
   const d = st.drag;
   if (!d) return;
   if (d.type === 'pan') {
@@ -835,7 +941,8 @@ function onMove(e) {
   node?.setAttribute('transform', d.kind === 'cam' ? `translate(${dx} ${dy})` : `translate(${d.o.x} ${d.o.y})`);
 }
 
-function onUp() {
+function onUp(e) {
+  if (e?.button === 1 && laser.src === 'mid') { setLaser(false); return; }
   const d = st.drag;
   st.drag = null;
   svg.classList.remove('panning');
@@ -845,6 +952,9 @@ function onUp() {
 
 function onKey(e) {
   const typing = /^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName);
+  if (e.key === 'Shift') { if (!e.repeat) { shiftAt = typing ? 0 : Date.now(); shiftOther = false; } return; }
+  if (e.shiftKey) shiftOther = true;
+  if (e.key === 'Escape' && laser.on) { setLaser(false); return; }
   if (e.key === 'Escape') {
     if (st.place) { cancelPlace(); renderSide(); return; }
     if (typing) { e.target.blur(); return; }
@@ -933,6 +1043,14 @@ function init() {
     setVB({ x: p.x - (p.x - st.vb.x) * k, y: p.y - (p.y - st.vb.y) * k, w, h: st.vb.h * k });
   }, { passive: false });
   addEventListener('keydown', onKey);
+  addEventListener('keyup', (e) => {
+    if (e.key !== 'Shift') return;
+    if (shiftAt && !shiftOther && Date.now() - shiftAt < 600) setLaser(!laser.on, 'shift');
+    shiftAt = 0;
+  });
+  svg.addEventListener('mousedown', (e) => { if (e.button === 1) e.preventDefault(); });   // kein Auto-Scroll
+  svg.addEventListener('auxclick', (e) => e.preventDefault());
+  svg.addEventListener('pointerleave', () => { if (laser.on && !st.drag) { laser.pt = null; laserSend(); } });
   addEventListener('resize', () => setVB({ ...st.vb, h: st.vb.w * (svg.clientHeight / svg.clientWidth) }));
   onTableChange(() => {
     if (st.drag) return;

@@ -157,12 +157,14 @@ Beide Fenster nutzen denselben Browser-Speicher und gleichen sich live ab.
 - **Pfeiltasten:** Auswahl bewegen (mit Umschalt in größeren Schritten; Türen nur entlang der Wand).
 - **Entf:** Auswahl löschen (Tokens wandern in den Vorrat).
 - **Esc:** abbrechen.
+- **Laserpointer:** Mausrad-Taste gedrückt halten oder Shift kurz antippen (nochmal antippen = aus). Ein leuchtender roter Punkt erscheint an derselben Stelle auf der Spielerkarte.
 - **Setzen** startet man immer in der rechten Leiste (⌖). Danach wird der Mauszeiger zum Fadenkreuz, und ein Klick auf die Karte setzt das Objekt genau dort.
 
 **Menüs der rechten Leiste:**
-- **Tokens:** vorab anlegen und gespeichert lassen. Angaben: Name, Kürzel, Art, Farbe, Größe (0,5× bis 3×), optional ein Porträt. Die Liste lässt sich nach SC / NSC / Xenos filtern. Die Umrandung zeigt die Art: SC Kreis, NSC Quadrat, Xeno umgedrehtes Dreieck. **Für Spieler versteckt** blendet einen Token auf dem Fernseher aus.
+- **Tokens:** vorab anlegen und gespeichert lassen. Angaben: Name, Kürzel, Art, Farbe, Größe (0,5× bis 3×), optional ein Porträt. Arten: SC, NSC, Kernkult, Kult, Gef. in KS, Gef. in LH, Xeno, Sonstige; die Liste lässt sich danach filtern. Die Umrandung zeigt die Art: SC Kreis, NSC/Kult/Gefangene Quadrat, Xeno umgedrehtes Dreieck, Gruppe Sechseck.
+- **Gruppen-Tokens:** **+ NEUE GRUPPE** anlegen (Name, Kürzel, Farbe) und Tokens aus dem Vorrat zuordnen. Ein Klick auf die Gruppe auf der Karte zeigt rechts ihre Mitglieder. Setzt man ein Mitglied einzeln auf die Karte, verlässt es die Gruppe. **Für Spieler versteckt** blendet einen Token auf dem Fernseher aus.
 - **Pings:** Motion-Tracker-Ping, rot pulsierend. Er verschwindet nach 20 s; die Variante **bleibt** hält, bis du sie entfernst.
-- **Piktogramme:** Auswahl wie im Editor. Ein Klick setzt das Piktogramm, ein Rechtsklick in der Auswahl gibt ihm einen Namen (erscheint beim Darüberfahren). Pro Piktogramm wählst du, ob die Spieler es sehen.
+- **Piktogramme:** Die Piktogramme der Räume (aus dem Editor) sind für die Spieler standardmäßig unsichtbar. Freigeben lassen sie sich einzeln im Raummenü oder alle auf einmal im Piktogramm-Menü. Freie Piktogramme: Auswahl wie im Editor. Ein Klick setzt das Piktogramm, ein Rechtsklick in der Auswahl gibt ihm einen Namen (erscheint beim Darüberfahren). Pro Piktogramm wählst du, ob die Spieler es sehen.
 - **Türen:** neue Türen setzen (Grün/Orange/Rot), die Farbe ausgewählter Türen ändern oder sie löschen. Pro Tür wählst du, ob die Spieler ihre Farbe sehen; standardmäßig sind Türen für sie grau.
 - **Kameras:** neue Kameras setzen, Richtung und Reichweite einstellen, löschen. Pro Kamera wählst du, ob die Spieler sie sehen; standardmäßig sind Kameras für sie verborgen.
 - **Notizen:** setzen; auf Wunsch auch auf der Spielerkarte zeigen.
