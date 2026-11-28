@@ -391,39 +391,42 @@ function roomsHtml() {
 // Räume dieser Ebene, deren Eintrag in der Raumliste nicht zu passen scheint
 function roomProblems() {
   const no = levelNum(lv.plan.name);
-  const out = [];
+  const area = [];
+  const multi = [];
   const used = new Map();
   lv.plan.rooms.forEach((room) => {
     const e = roomEntry(lv, room, layer);
     if (!e) return;
-    const zone = roomZone(lv.plan, room, layer);
-    if (areaClash(e, zone)) out.push({ room, e, why: `BEREICH AUF DER KARTE: ${zone}` });
     used.set(e.id, [...(used.get(e.id) || []), room]);
+    const zone = roomZone(lv.plan, room, layer);
+    if (areaClash(e, zone)) area.push({ room, e, zone });
   });
-  used.forEach((rooms) => {
-    if (rooms.length < 2) return;
-    rooms.forEach((room) => { if (!out.some((x) => x.room === room)) out.push({ room, e: roomEntry(lv, room, layer), why: `EINTRAG GILT FÜR ${rooms.length} RÄUME` }); });
-  });
+  used.forEach((rooms) => { if (rooms.length > 1) rooms.forEach((room) => multi.push({ room, e: roomEntry(lv, room, layer), n: rooms.length })); });
   // feste Verknüpfungen auf diese Ebene von Einträgen einer anderen Ebene (werden ignoriert)
   const stale = roomListEntries().filter((r) => String(r.mapLink || '').startsWith(`${lv.id}:`) && levelClash(r, no));
-  return { out, stale };
+  return { area, multi, stale };
 }
 
 function roomCheckHtml() {
   if (roomListEmpty()) return '<div class="gm-btns"><button data-act="rcheck">← ZURÜCK</button></div><p class="gm-note">Die Raumliste ist in diesem Browser nicht geladen.</p>';
-  const { out, stale } = roomProblems();
-  const entry = (e) => `${esc([e.area, e.subarea].filter(Boolean).join(' › ') || '–')} · ${esc(e.name || '–')} · EBENE ${esc(e.level ?? '–')}`;
+  const { area, multi, stale } = roomProblems();
+  const entry = (e) => `<b>${esc(e.roomId || '–')}</b> ${esc(e.name || '–')} <span class="dim">(${esc([e.area, e.subarea].filter(Boolean).join(' › ') || '–')}, EBENE ${esc(e.level ?? '–')})</span>`;
+  const row = (room, e, extra = '') => `<div class="gm-prob">
+      <div>KARTE: <b>${esc(roomCode(room, layer).toUpperCase())}</b> <span class="dim">im Bereich ${esc(roomZone(lv.plan, room, layer))}</span></div>
+      <div>ZEIGT: ${entry(e)}</div>${extra}
+      <div class="gm-btns"><button data-act="sel" data-kind="room" data-id="${esc(room.id)}">ÖFFNEN</button></div></div>`;
   return `<div class="gm-btns"><button data-act="rcheck">← ZURÜCK</button></div>
-    <p class="gm-note">Prüft ${esc(lv.plan.name)}: Räume, deren Eintrag in der Raumliste nicht zum Bereich auf der Karte passt.</p>
-    ${out.map(({ room, e, why }) => {
-      const linked = e.mapLink === mapLinkOf(lv.id, room);
-      return `<div class="gm-prob"><b>${esc(roomLabel(lv, room, layer).code)}</b> <span class="dim">${esc(why)}</span>
-        <div>RAUMLISTE: ${entry(e)}${linked ? ' <span class="dim">(FEST VERKNÜPFT)</span>' : ''}</div>
-        <div class="gm-btns">${linked ? `<button data-act="runlink" data-id="${esc(e.id)}">VERKNÜPFUNG LÖSEN</button>` : ''}<button data-act="sel" data-kind="room" data-id="${esc(room.id)}">ÖFFNEN</button></div></div>`;
-    }).join('') || '<p class="gm-ok">KEINE AUFFÄLLIGKEITEN AUF DIESER EBENE.</p>'}
-    ${stale.length ? `<div class="gm-sub">VERKNÜPFUNGEN VON ANDEREN EBENEN (WERDEN IGNORIERT)</div>
-      ${stale.map((e) => `<div class="gm-prob"><div>${entry(e)}</div><div class="gm-btns"><button data-act="runlink" data-id="${esc(e.id)}">VERKNÜPFUNG LÖSEN</button></div></div>`).join('')}
-      <div class="gm-btns"><button data-act="runlinkall">ALLE ${stale.length} LÖSEN</button></div>` : ''}`;
+    <p class="gm-note">Diese Prüfung ändert nichts von selbst. Sie zeigt nur, wo du auf ${esc(lv.plan.name)} hinschauen solltest.</p>
+    ${!area.length && !multi.length && !stale.length ? '<p class="gm-ok">KEINE AUFFÄLLIGKEITEN AUF DIESER EBENE.</p>' : ''}
+    ${stale.length ? `<div class="gm-sub gm-bad">FEHLER: VERKNÜPFUNGEN VON EINTRÄGEN EINER ANDEREN EBENE (${stale.length})</div>
+      <p class="gm-note">Diese Einträge gehören laut Raumliste auf eine andere Ebene, waren aber mit einem Raum hier verknüpft. Sie werden bereits ignoriert. Lösen räumt nur auf.</p>
+      ${stale.map((e) => `<div class="gm-prob"><div>${entry(e)}</div><div class="gm-btns"><button data-act="runlink" data-id="${esc(e.id)}">VERKNÜPFUNG LÖSEN</button></div></div>`).join('')}` : ''}
+    ${multi.length ? `<div class="gm-sub gm-bad">PRÜFEN: EIN EINTRAG FÜR MEHRERE RÄUME (${multi.length})</div>
+      <p class="gm-note">Mehrere Räume der Karte zeigen denselben Eintrag. Meist fehlt bei einem Raum der eigene Eintrag oder die Raum-ID ist doppelt.</p>
+      ${multi.map(({ room, e }) => row(room, e)).join('')}` : ''}
+    ${area.length ? `<div class="gm-sub">NUR HINWEIS: BEREICHSNAME WEICHT AB (${area.length})</div>
+      <p class="gm-note">Der Bereich heißt auf der Karte anders als in der Raumliste. Das ist meist nur eine andere Schreibweise und harmlos. Wichtig ist nur: Stimmt der Name hinter ZEIGT?</p>
+      ${area.map(({ room, e }) => row(room, e)).join('')}` : ''}`;
 }
 
 const titleCase = (s) => String(s || '').toLowerCase().replace(/(^|[\s\-/(])(\p{L})/gu, (_, a, b) => a + b.toUpperCase());
@@ -599,7 +602,6 @@ function action(b) {
     case 'redit': st.roomEdit = !st.roomEdit; if (st.roomEdit) ensureEntry(o); renderSide(); return;
     case 'rcheck': st.roomCheck = !st.roomCheck; renderSide(); return;
     case 'runlink': updateEntry(b.dataset.id, { mapLink: '' }); render(); renderSide(); toast('VERKNÜPFUNG GELÖST'); return;
-    case 'runlinkall': roomProblems().stale.forEach((e) => updateEntry(e.id, { mapLink: '' })); render(); renderSide(); return;
     case 'rclutter': {
       const open = roomListEntries().filter((e) => !isCluttered(e));
       if (!confirm(`${open.length} Räume auf CLUTTERED setzen?`)) return;

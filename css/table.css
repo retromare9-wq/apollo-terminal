@@ -164,3 +164,4 @@ img.sh { border: 2px solid; object-fit: cover; }
 .gm-prob { border: 1px solid var(--rust-2); padding: 6px 8px; font-size: 12px; display: flex; flex-direction: column; gap: 4px; }
 .gm-prob b { color: var(--yellow); }
 .gm-ok { color: var(--mint); font-weight: 700; font-size: 12px; }
+.gm-sub.gm-bad { color: var(--red); }

@@ -71,8 +71,13 @@ export function addEntry(entry) {
 // ---------- Kopplung Karte ↔ Raumliste ----------
 
 const lc = (s) => String(s ?? '').trim().toLowerCase();
-// Ebene des Eintrags passt nicht zur Ebene der Karte (leere Angaben gelten als passend)
-export const levelClash = (r, levelNo) => levelNo != null && String(r.level ?? '').trim() !== '' && String(r.level).trim() !== String(levelNo);
+// Ebene eines Eintrags als Zahl („-1“, „−1“, „– 1“, „Level -1“ → -1), sonst null
+export function entryLevel(r) {
+  const m = String(r.level ?? '').replace(/[\u2212\u2012\u2013\u2014]/g, '-').replace(/-\s+/g, '-').match(/-?\d+/);
+  return m ? Number(m[0]) : null;
+}
+// Ebene des Eintrags passt eindeutig nicht zur Ebene der Karte (fehlende/unklare Angaben gelten als passend)
+export const levelClash = (r, levelNo) => levelNo != null && entryLevel(r) != null && entryLevel(r) !== Number(levelNo);
 // Bereich des Eintrags passt nicht zum Bereich auf der Karte (nur wenn beide angegeben sind)
 export function areaClash(r, zone) {
   const z = lc(zone);
@@ -92,7 +97,7 @@ export function findEntry({ levelId, levelNo, room, code, zone }) {
   if (direct) return direct;
   if (levelNo == null) return null;
   const c = lc(code);
-  const hits = list.filter((r) => !r.mapLink && String(r.level) === String(levelNo) && c && (lc(r.roomId) === c || lc(r.linkId) === c));
+  const hits = list.filter((r) => !r.mapLink && (String(r.level) === String(levelNo) || entryLevel(r) === Number(levelNo)) && c && (lc(r.roomId) === c || lc(r.linkId) === c));
   if (hits.length <= 1) return hits[0] || null;
   const z = lc(zone);
   return hits.find((r) => z && [r.subarea, r.area].some((a) => lc(a) && (z.includes(lc(a)) || lc(a).includes(z)))) || hits[0];
